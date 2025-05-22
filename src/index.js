@@ -2,9 +2,8 @@ import { infiniteScrollModule } from './about';
 gsap.registerPlugin(SplitText, ScrollTrigger);
 
 // Functions
-function initSliders() {
+function initHpSlider() {
   const hpSlider = new Swiper('.hp-work_slider-slider', {
-    // Optional parameters
     spaceBetween: 1,
     loop: true,
     speed: 2000,
@@ -12,6 +11,7 @@ function initSliders() {
       enabled: true,
       forceToAxis: true,
     },
+    loopAdditionalSlides: 6,
     on: {
       slideChange: (swiper) => {
         updateHpSlider(swiper);
@@ -31,9 +31,9 @@ function updateHpSlider(swiper) {
   let location = activeSlider.attr('data-location');
   let tags = activeSlider.attr('data-tags');
 
-  $('[data-tags-el]').text(tags);
-  $('[data-location-el]').text(location);
-  $('[data-title-el]').text(title);
+  animateScambleText($('[data-tags-el]'), tags);
+  animateScambleText($('[data-location-el]'), location);
+  animateScambleText($('[data-title-el]'), title);
 }
 
 function initLenis() {
@@ -202,14 +202,515 @@ function pauseScroll(state) {
   if (window.lenisInstance) {
     if (state === true) {
       window.lenisInstance.stop();
+      lenisInstance.scrollTo(0);
     } else {
       window.lenisInstance.start();
+      lenisInstance.scrollTo(0);
     }
   }
 }
 
+function initTimeCheck() {
+  function updateCETTime() {
+    const now = new Date();
+
+    // Convert to CET timezone (UTC+1 or UTC+2 during daylight savings)
+    const cetOptions = {
+      timeZone: 'Europe/Paris',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    };
+
+    const cetTimeString = now.toLocaleTimeString('en-GB', cetOptions);
+
+    // Update the time display
+    $('[data-time-cet]').text(`CET ${cetTimeString}`);
+  }
+
+  // Update time immediately
+  updateCETTime();
+
+  // Update every second
+  setInterval(updateCETTime, 1000);
+}
+
+function initCSSMarquee() {
+  const pixelsPerSecond = 75; // Set the marquee speed (pixels per second)
+  const marquees = document.querySelectorAll('[data-css-marquee]');
+  let activeMarquees = [];
+  let resizeTimer;
+
+  function setupMarquee(marquee) {
+    // Check if already initialized
+    if (marquee.getAttribute('data-initialized') === 'true') {
+      return;
+    }
+
+    // Duplicate each [data-css-marquee-list] element inside its container
+    const lists = marquee.querySelectorAll('[data-css-marquee-list]');
+    lists.forEach((list) => {
+      const duplicate = list.cloneNode(true);
+      marquee.appendChild(duplicate);
+    });
+
+    // Calculate the width and set the animation duration accordingly
+    marquee.querySelectorAll('[data-css-marquee-list]').forEach((list) => {
+      list.style.animationDuration = list.offsetWidth / pixelsPerSecond + 's';
+      list.style.animationPlayState = 'paused';
+    });
+
+    // Mark as initialized
+    marquee.setAttribute('data-initialized', 'true');
+    activeMarquees.push(marquee);
+  }
+
+  function destroyMarquee(marquee) {
+    // Remove any duplicated lists
+    const lists = marquee.querySelectorAll('[data-css-marquee-list]');
+    for (let i = lists.length - 1; i >= lists.length / 2; i--) {
+      lists[i].remove();
+    }
+
+    // Reset animation styles
+    marquee.querySelectorAll('[data-css-marquee-list]').forEach((list) => {
+      list.style.animationDuration = '';
+      list.style.animationPlayState = '';
+    });
+
+    // Mark as not initialized
+    marquee.setAttribute('data-initialized', 'false');
+
+    // Remove from active marquees
+    const index = activeMarquees.indexOf(marquee);
+    if (index > -1) {
+      activeMarquees.splice(index, 1);
+    }
+  }
+
+  function checkBreakpoint(marquee) {
+    const breakpoint = parseInt(marquee.getAttribute('data-breakpoint') || '0');
+    const currentWidth = window.innerWidth;
+
+    if (currentWidth <= breakpoint) {
+      setupMarquee(marquee);
+    } else {
+      if (marquee.getAttribute('data-initialized') === 'true') {
+        destroyMarquee(marquee);
+      }
+    }
+  }
+
+  // Create an IntersectionObserver to check if the marquee container is in view
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.target.getAttribute('data-initialized') === 'true') {
+          entry.target
+            .querySelectorAll('[data-css-marquee-list]')
+            .forEach(
+              (list) =>
+                (list.style.animationPlayState = entry.isIntersecting ? 'running' : 'paused')
+            );
+        }
+      });
+    },
+    { threshold: 0 }
+  );
+
+  // Initialize based on breakpoints
+  function initAll() {
+    marquees.forEach((marquee) => {
+      checkBreakpoint(marquee);
+      observer.observe(marquee);
+    });
+  }
+
+  // Handle window resize
+  function handleResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      marquees.forEach((marquee) => {
+        checkBreakpoint(marquee);
+      });
+    }, 250); // Debounce resize events
+  }
+
+  // Set up resize listener
+  window.addEventListener('resize', handleResize);
+
+  // Initial setup
+  initAll();
+}
+
+function initWhySwipers() {
+  const caseSwiper = new Swiper('.why-hero_cases-slider', {
+    slidesPerView: 1,
+    effect: 'fade',
+    fadeEffect: {
+      crossFade: true,
+    },
+    pagination: {
+      el: '.swiper-nav.cc-cases',
+      bulletClass: 'swiper-dot',
+      bulletActiveClass: 'cc-active',
+      clickable: true,
+    },
+  });
+
+  const testimonials = new Swiper('.why-hero_quotes-slider', {
+    slidesPerView: 1,
+    effect: 'fade',
+    fadeEffect: {
+      crossFade: true,
+    },
+    loop: true,
+    pagination: {
+      el: '.swiper-nav.cc-quotes',
+      bulletClass: 'swiper-dot',
+      bulletActiveClass: 'cc-active',
+      clickable: true,
+    },
+    on: {
+      init: function () {
+        updateAvatarImages(this);
+      },
+      slideChange: function () {
+        updateAvatarImages(this);
+      },
+    },
+  });
+
+  function updateAvatarImages(swiper) {
+    let { slides } = swiper;
+    let totalSlides = slides.length;
+
+    slides.forEach((slide, index) => {
+      let cc1Circle = $(slide).find('.why-hero_quotes-avatar-circle.cc-1');
+      let cc2Circle = $(slide).find('.why-hero_quotes-avatar-circle.cc-2');
+
+      let nextSlideIndex = (index + 1) % totalSlides;
+      let nextNextSlideIndex = (index + 2) % totalSlides;
+
+      let nextSlideCC3Image = $(slides[nextSlideIndex])
+        .find('.why-hero_quotes-avatar-circle.cc-avatar img')
+        .attr('src');
+      let nextNextSlideCC3Image = $(slides[nextNextSlideIndex])
+        .find('.why-hero_quotes-avatar-circle.cc-avatar img')
+        .attr('src');
+
+      if (nextNextSlideCC3Image) {
+        cc1Circle.find('img').attr('src', nextNextSlideCC3Image);
+      }
+
+      if (nextSlideCC3Image) {
+        cc2Circle.find('img').attr('src', nextSlideCC3Image);
+      }
+    });
+  }
+}
+
+function initAdvancedFormValidation() {
+  const forms = document.querySelectorAll('[data-form-validate]');
+
+  forms.forEach((formContainer) => {
+    const startTime = new Date().getTime();
+
+    const form = formContainer.querySelector('form');
+    if (!form) return;
+
+    const validateFields = form.querySelectorAll('[data-validate]');
+    const dataSubmit = form.querySelector('[data-submit]');
+    if (!dataSubmit) return;
+
+    const realSubmitInput = dataSubmit.querySelector('input[type="submit"]');
+    if (!realSubmitInput) return;
+
+    function isSpam() {
+      const currentTime = new Date().getTime();
+      return currentTime - startTime < 5000;
+    }
+
+    // Disable select options with invalid values on page load
+    validateFields.forEach(function (fieldGroup) {
+      const select = fieldGroup.querySelector('select');
+      if (select) {
+        const options = select.querySelectorAll('option');
+        options.forEach(function (option) {
+          if (
+            option.value === '' ||
+            option.value === 'disabled' ||
+            option.value === 'null' ||
+            option.value === 'false'
+          ) {
+            option.setAttribute('disabled', 'disabled');
+          }
+        });
+      }
+    });
+
+    function validateAndStartLiveValidationForAll() {
+      let allValid = true;
+      let firstInvalidField = null;
+
+      validateFields.forEach(function (fieldGroup) {
+        const input = fieldGroup.querySelector('input, textarea, select');
+        const radioCheckGroup = fieldGroup.querySelector('[data-radiocheck-group]');
+        if (!input && !radioCheckGroup) return;
+
+        if (input) input.__validationStarted = true;
+        if (radioCheckGroup) {
+          radioCheckGroup.__validationStarted = true;
+          const inputs = radioCheckGroup.querySelectorAll(
+            'input[type="radio"], input[type="checkbox"]'
+          );
+          inputs.forEach(function (input) {
+            input.__validationStarted = true;
+          });
+        }
+
+        updateFieldStatus(fieldGroup);
+
+        if (!isValid(fieldGroup)) {
+          allValid = false;
+          if (!firstInvalidField) {
+            firstInvalidField = input || radioCheckGroup.querySelector('input');
+          }
+        }
+      });
+
+      if (!allValid && firstInvalidField) {
+        firstInvalidField.focus();
+      }
+
+      return allValid;
+    }
+
+    function isValid(fieldGroup) {
+      const radioCheckGroup = fieldGroup.querySelector('[data-radiocheck-group]');
+      if (radioCheckGroup) {
+        const inputs = radioCheckGroup.querySelectorAll(
+          'input[type="radio"], input[type="checkbox"]'
+        );
+        const checkedInputs = radioCheckGroup.querySelectorAll('input:checked');
+        const min = parseInt(radioCheckGroup.getAttribute('min')) || 1;
+        const max = parseInt(radioCheckGroup.getAttribute('max')) || inputs.length;
+        const checkedCount = checkedInputs.length;
+
+        if (inputs[0].type === 'radio') {
+          return checkedCount >= 1;
+        }
+        if (inputs.length === 1) {
+          return inputs[0].checked;
+        }
+        return checkedCount >= min && checkedCount <= max;
+      }
+      const input = fieldGroup.querySelector('input, textarea, select');
+      if (!input) return false;
+
+      let valid = true;
+      const min = parseInt(input.getAttribute('min')) || 0;
+      const max = parseInt(input.getAttribute('max')) || Infinity;
+      const value = input.value.trim();
+      const { length } = value;
+
+      if (input.tagName.toLowerCase() === 'select') {
+        if (value === '' || value === 'disabled' || value === 'null' || value === 'false') {
+          valid = false;
+        }
+      } else if (input.type === 'email') {
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        valid = emailPattern.test(value);
+      } else {
+        if (input.hasAttribute('min') && length < min) valid = false;
+        if (input.hasAttribute('max') && length > max) valid = false;
+      }
+
+      return valid;
+    }
+
+    function updateFieldStatus(fieldGroup) {
+      const radioCheckGroup = fieldGroup.querySelector('[data-radiocheck-group]');
+      if (radioCheckGroup) {
+        const inputs = radioCheckGroup.querySelectorAll(
+          'input[type="radio"], input[type="checkbox"]'
+        );
+        const checkedInputs = radioCheckGroup.querySelectorAll('input:checked');
+
+        if (checkedInputs.length > 0) {
+          fieldGroup.classList.add('is--filled');
+        } else {
+          fieldGroup.classList.remove('is--filled');
+        }
+
+        const valid = isValid(fieldGroup);
+
+        if (valid) {
+          fieldGroup.classList.add('is--success');
+          fieldGroup.classList.remove('is--error');
+        } else {
+          fieldGroup.classList.remove('is--success');
+          const anyInputValidationStarted = Array.from(inputs).some(
+            (input) => input.__validationStarted
+          );
+          if (anyInputValidationStarted) {
+            fieldGroup.classList.add('is--error');
+          } else {
+            fieldGroup.classList.remove('is--error');
+          }
+        }
+      } else {
+        const input = fieldGroup.querySelector('input, textarea, select');
+        if (!input) return;
+
+        const value = input.value.trim();
+
+        if (value) {
+          fieldGroup.classList.add('is--filled');
+        } else {
+          fieldGroup.classList.remove('is--filled');
+        }
+
+        const valid = isValid(fieldGroup);
+
+        if (valid) {
+          fieldGroup.classList.add('is--success');
+          fieldGroup.classList.remove('is--error');
+        } else {
+          fieldGroup.classList.remove('is--success');
+          if (input.__validationStarted) {
+            fieldGroup.classList.add('is--error');
+          } else {
+            fieldGroup.classList.remove('is--error');
+          }
+        }
+      }
+    }
+
+    validateFields.forEach(function (fieldGroup) {
+      const input = fieldGroup.querySelector('input, textarea, select');
+      const radioCheckGroup = fieldGroup.querySelector('[data-radiocheck-group]');
+
+      if (radioCheckGroup) {
+        const inputs = radioCheckGroup.querySelectorAll(
+          'input[type="radio"], input[type="checkbox"]'
+        );
+        inputs.forEach(function (input) {
+          input.__validationStarted = false;
+
+          input.addEventListener('change', function () {
+            requestAnimationFrame(function () {
+              if (!input.__validationStarted) {
+                const checkedCount = radioCheckGroup.querySelectorAll('input:checked').length;
+                const min = parseInt(radioCheckGroup.getAttribute('min')) || 1;
+
+                if (checkedCount >= min) {
+                  input.__validationStarted = true;
+                }
+              }
+
+              if (input.__validationStarted) {
+                updateFieldStatus(fieldGroup);
+              }
+            });
+          });
+
+          input.addEventListener('blur', function () {
+            input.__validationStarted = true;
+            updateFieldStatus(fieldGroup);
+          });
+        });
+      } else if (input) {
+        input.__validationStarted = false;
+
+        if (input.tagName.toLowerCase() === 'select') {
+          input.addEventListener('change', function () {
+            input.__validationStarted = true;
+            updateFieldStatus(fieldGroup);
+          });
+        } else {
+          input.addEventListener('input', function () {
+            const value = input.value.trim();
+            const { length } = value;
+            const min = parseInt(input.getAttribute('min')) || 0;
+            const max = parseInt(input.getAttribute('max')) || Infinity;
+
+            if (!input.__validationStarted) {
+              if (input.type === 'email') {
+                if (isValid(fieldGroup)) input.__validationStarted = true;
+              } else {
+                if (
+                  (input.hasAttribute('min') && length >= min) ||
+                  (input.hasAttribute('max') && length <= max)
+                ) {
+                  input.__validationStarted = true;
+                }
+              }
+            }
+
+            if (input.__validationStarted) {
+              updateFieldStatus(fieldGroup);
+            }
+          });
+
+          input.addEventListener('blur', function () {
+            input.__validationStarted = true;
+            updateFieldStatus(fieldGroup);
+          });
+        }
+      }
+    });
+
+    dataSubmit.addEventListener('click', function () {
+      if (validateAndStartLiveValidationForAll()) {
+        if (isSpam()) {
+          alert('Form submitted too quickly. Please try again.');
+          return;
+        }
+        realSubmitInput.click();
+      }
+    });
+
+    form.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
+        event.preventDefault();
+        if (validateAndStartLiveValidationForAll()) {
+          if (isSpam()) {
+            alert('Form submitted too quickly. Please try again.');
+            return;
+          }
+          realSubmitInput.click();
+        }
+      }
+    });
+  });
+
+  // Checkbox and Radio Class
+  $('.form-checkbox').each(function () {
+    const $label = $(this);
+    const $input = $label.find('input[type="checkbox"], input[type="radio"]');
+
+    function updateState() {
+      if ($input.attr('type') === 'radio') {
+        $(`input[name="${$input.attr('name')}"]`).each(function () {
+          $(this).closest('.form-checkbox').removeClass('cc-active');
+        });
+      }
+
+      if ($input.is(':checked')) {
+        $label.addClass('cc-active');
+      } else {
+        $label.removeClass('cc-active');
+      }
+    }
+
+    updateState();
+    $input.on('change', updateState);
+  });
+}
+
 // -- Anims
-function animateHomepageHero() {
+function animateNav() {
   $('.nav_meta-col').each(function () {
     let links = $(this).find('a');
     let pars = $(this).find('p');
@@ -218,7 +719,10 @@ function animateHomepageHero() {
     initMaskTextReveal(pars);
     gsap.fromTo($('.nav_mode'), { scale: 0 }, { scale: 1 });
   });
+}
 
+// -- Homepage
+function animateHomepageHero() {
   $('.hp-hero_content-block').each(function () {
     let tl = gsap.timeline();
     initMaskTextReveal($(this).find('p').eq(0));
@@ -244,18 +748,52 @@ function animateHomepageHero() {
   });
 }
 
+function animateWorksLinks(list, listitem) {
+  console.log($(list).find(listitem));
+  $(list)
+    .find(listitem)
+    .hover(function () {
+      const index = $(this).parent().index();
+      const totalImages = $('.links-imgs_box-item').length;
+      const movePercentage = -(index * (100 / totalImages));
+
+      gsap.to('.links-imgs_box-list', {
+        yPercent: movePercentage,
+        duration: 0.3,
+        ease: 'power2.inOut',
+      });
+    });
+
+  $(list).hover(
+    function () {
+      gsap.to('.links-imgs_box-wrap', {
+        scale: 1,
+        duration: 0.2,
+        ease: 'power4.in',
+      });
+    },
+    function () {
+      gsap.to('.links-imgs_box-wrap', {
+        scale: 0,
+        duration: 0.2,
+        ease: 'power4.out',
+      });
+    }
+  );
+}
+
 function animateWorkLoad() {
   var tl = gsap.timeline({});
 
+  let visualWrap = '.work-d_hero-wrap.cc-images';
   let visualList = '.work-d_hero-wrap.cc-images .work-d_hero-list';
   let visualItem = '.work-d_hero-wrap.cc-images .work-d_hero-list-item';
-  let visualImg = '.work-d_hero-wrap.cc-images img';
   let timeline = '.work-d_hero-timeline';
 
   tl.set(
     [timeline],
     {
-      y: '0vh',
+      y: '10vh',
       rotate: 0.001,
     },
     '<'
@@ -269,28 +807,10 @@ function animateWorkLoad() {
     '<'
   );
 
-  tl.set(
-    visualItem,
-    {
-      scale: 0.5,
-      rotate: 0.001,
-    },
-    '<'
-  );
-
-  tl.set(
-    visualImg,
-    {
-      rotate: 0.001,
-      scale: 1.4,
-    },
-    '<'
-  );
-
   tl.to(
     visualList,
     {
-      duration: 2.2,
+      duration: 1,
       ease: 'Power4.easeOut',
       rotate: 0.001,
       y: 0,
@@ -303,26 +823,14 @@ function animateWorkLoad() {
     '<'
   );
 
-  tl.to(
+  tl.from(
     visualItem,
     {
       duration: 2,
       ease: 'Expo.easeInOut',
       rotate: 0.001,
-      scale: 1,
+      opacity: 0,
       y: '0px',
-      clearProps: 'all',
-    },
-    '< 1.2'
-  );
-
-  tl.to(
-    visualImg,
-    {
-      duration: 2.1,
-      ease: 'Expo.easeInOut',
-      rotate: 0.001,
-      scale: 1,
       clearProps: 'all',
     },
     '<'
@@ -349,36 +857,51 @@ function animateWorkTimeline() {
       trigger: wrap,
       start: 'top top',
       end: 'bottom bottom',
-      scrub: 1,
+      scrub: true,
       markers: true,
     },
   });
 
   tl.to('.work-d_hero-timeline-inner', {
     y: () => {
-      let containerHeight = $('.work-d_hero-timeline').height();
+      let containerHeight = $('.work-d_hero-timeline-inner').height();
       let itemHeight = $('.work-d_hero-timeline_item').first().outerHeight(true);
       return -(containerHeight - itemHeight) + 'px';
     },
+    ease: 'none',
   });
 
   $('.work-d_hero-timeline_item').on('click', function () {
-    // Get the index of the clicked timeline item
     let index = $(this).index();
-
-    // Find the corresponding list item with the same index
     let targetElement = $('.work-d_hero-list-item').eq(index);
 
-    // Get the target element's position
-    let targetPosition =
-      targetElement.offset().top -
-      1.6 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    let targetPosition = targetElement.offset().top;
+    let targetHeight = targetElement.outerHeight();
+    let windowHeight = $(window).height();
 
-    // Scroll to the target position using Lenis
-    lenisInstance.scrollTo(targetPosition, {
-      duration: 1.2, // Animation duration in seconds
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // Ease out expo (optional)
+    let centeredPosition = targetPosition - windowHeight / 2 + targetHeight / 2;
+
+    lenisInstance.scrollTo(centeredPosition, {
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     });
+  });
+
+  // Active State
+  let tl1 = gsap.timeline({
+    scrollTrigger: {
+      trigger: '.section.cc-work-d-content',
+      start: 'top bottom',
+      end: 'top bottom',
+      markers: true,
+      onEnterBack: () => {
+        gsap.to($('.work-d_hero-timeline-active'), { height: '10.8rem', y: 0 });
+      },
+      onLeave: () => {
+        let itemHeight = $('.work-d_hero-timeline_item').first().outerHeight(true);
+        gsap.to($('.work-d_hero-timeline-active'), { height: '1px', y: itemHeight + 3 + 'px' });
+      },
+    },
   });
 }
 
@@ -403,6 +926,19 @@ function animateWorkIcon() {
   );
 }
 
+function animateScambleText(label, text) {
+  let scrambleChars = '0123456789!@#$%^&*()_+<>?:|';
+  gsap.to(label, {
+    duration: 0.5,
+    scrambleText: {
+      text: text,
+      chars: scrambleChars,
+      speed: 0.3,
+      ease: 'power2.inOut',
+    },
+  });
+}
+
 function initMaskTextReveal(el) {
   const splitConfig = {
     lines: { duration: 0.8, stagger: 0.08 },
@@ -410,11 +946,24 @@ function initMaskTextReveal(el) {
     chars: { duration: 0.4, stagger: 0.01 },
   };
 
-  $(el).each(function () {
-    const heading = $(this);
+  let splitInstances = [];
+  let scrollTriggerInstances = [];
 
-    // Add a small delay to ensure the element is rendered
-    setTimeout(function () {
+  function setupSplitText() {
+    scrollTriggerInstances.forEach((trigger) => {
+      if (trigger) trigger.kill();
+    });
+
+    splitInstances.forEach((split) => {
+      if (split) split.revert();
+    });
+
+    splitInstances = [];
+    scrollTriggerInstances = [];
+
+    $(el).each(function () {
+      const heading = $(this);
+      if (heading.hasClass('animated')) return;
       const type = heading.data('split-reveal') || 'lines';
       const typesToSplit =
         type === 'lines'
@@ -423,8 +972,13 @@ function initMaskTextReveal(el) {
           ? ['lines', 'words']
           : ['lines', 'words', 'chars'];
 
-      // Force reflow before creating split text
-      heading[0].offsetHeight;
+      const isInsideLi = heading.closest('li').length > 0;
+
+      gsap.set(heading, { visibility: 'visible', opacity: 1 });
+
+      if (isInsideLi) {
+        gsap.set(heading.closest('li'), { opacity: 0 });
+      }
 
       try {
         const splitText = new SplitText(heading[0], {
@@ -435,67 +989,233 @@ function initMaskTextReveal(el) {
           charsClass: 'letter',
         });
 
-        // Ensure targets exist
+        splitInstances.push(splitText);
+
         const targets = splitText[type];
         if (!targets || targets.length === 0) {
           console.warn('No split targets found for', heading);
           return;
         }
 
-        // Set initial state for animation
         gsap.set(targets, { yPercent: 110 });
-
-        // Force reflow again
-        heading[0].offsetHeight;
 
         const config = splitConfig[type];
         const triggerType = heading.data('trigger-type') || 'load';
 
-        // Make sure the element is visible for the split text
-        gsap.set(heading, { visibility: 'visible', opacity: 1 });
-
-        if (triggerType === 'scroll') {
-          gsap.to(targets, {
-            yPercent: 0,
-            duration: config.duration,
-            stagger: config.stagger,
-            ease: 'expo.out',
-            scrollTrigger: {
-              trigger: heading[0],
-              start: 'clamp(top 80%)',
-              once: true,
-              markers: heading.data('debug-markers') === 'true',
+        const animateText = () => {
+          const tl = gsap.timeline({
+            onComplete: () => {
+              heading.addClass('animated');
             },
           });
-        } else {
-          // For load animations
-          gsap.to(targets, {
-            yPercent: 0,
-            duration: config.duration,
-            stagger: config.stagger,
-            ease: 'expo.out',
-            delay: 0.2, // Slightly longer delay to ensure everything is ready
+
+          if (isInsideLi) {
+            tl.to(
+              heading.closest('li'),
+              {
+                opacity: 1,
+                duration: config.duration * 0.3,
+                ease: 'power2.out',
+              },
+              0
+            );
+          }
+
+          tl.to(
+            targets,
+            {
+              yPercent: 0,
+              duration: config.duration,
+              stagger: config.stagger,
+              ease: 'expo.out',
+            },
+            isInsideLi ? config.duration * 0.15 : 0
+          );
+
+          return tl;
+        };
+
+        if (triggerType === 'scroll') {
+          const trigger = ScrollTrigger.create({
+            trigger: heading[0],
+            start: 'clamp(top 80%)',
+            once: true,
+            markers: heading.data('debug-markers') === 'true',
+            onEnter: animateText,
           });
+
+          scrollTriggerInstances.push(trigger);
+        } else {
+          gsap.delayedCall(0.2, animateText);
         }
       } catch (error) {
         console.error('Error in SplitText:', error);
       }
-    }, 50); // Small timeout to ensure the DOM is ready
-  });
+    });
+  }
+
+  setTimeout(setupSplitText, 300);
+
+  function debounce(func, wait) {
+    let timeout;
+    return function () {
+      const context = this;
+      const args = arguments;
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+  }
+
+  const debouncedResize = debounce(setupSplitText, 200);
+  $(window).on('resize', debouncedResize);
+
+  return function cleanup() {
+    $(window).off('resize', debouncedResize);
+    scrollTriggerInstances.forEach((trigger) => {
+      if (trigger) trigger.kill();
+    });
+    splitInstances.forEach((split) => {
+      if (split) split.revert();
+    });
+  };
+}
+
+function initItemReveal(el) {
+  let scrollTriggerInstances = [];
+
+  function setupItemReveal() {
+    scrollTriggerInstances.forEach((trigger) => {
+      if (trigger) trigger.kill();
+    });
+
+    scrollTriggerInstances = [];
+
+    $(el).each(function () {
+      const item = $(this);
+      if (item.hasClass('animated')) return;
+
+      const duration = item.data('duration') || 0.6;
+      const delay = item.data('delay') || 0;
+      const triggerType = item.data('trigger-type') || 'scroll';
+
+      gsap.set(item, { opacity: 0 });
+
+      const animateItem = () => {
+        gsap.to(item, {
+          opacity: 1,
+          duration: duration,
+          delay: delay,
+          ease: 'power2.out',
+          onComplete: () => {
+            item.addClass('animated');
+          },
+        });
+      };
+
+      if (triggerType === 'scroll') {
+        const trigger = ScrollTrigger.create({
+          trigger: item[0],
+          start: 'clamp(top 80%)',
+          once: true,
+          markers: item.data('debug-markers') === 'true',
+          onEnter: animateItem,
+        });
+
+        scrollTriggerInstances.push(trigger);
+      } else {
+        gsap.delayedCall(0.2, animateItem);
+      }
+    });
+  }
+
+  setTimeout(setupItemReveal, 300);
+
+  function debounce(func, wait) {
+    let timeout;
+    return function () {
+      const context = this;
+      const args = arguments;
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+  }
+
+  const debouncedResize = debounce(setupItemReveal, 200);
+  $(window).on('resize', debouncedResize);
+
+  return function cleanup() {
+    $(window).off('resize', debouncedResize);
+    scrollTriggerInstances.forEach((trigger) => {
+      if (trigger) trigger.kill();
+    });
+  };
+}
+
+function initGridReveal() {
+  gsap.fromTo(
+    '.grid-line.is-h',
+    {
+      scaleX: 0,
+    },
+    {
+      scaleX: 1,
+      stagger: 0.1,
+      duration: 3,
+      immediateRender: true,
+      ease: 'power4.inOut',
+    }
+  );
+
+  gsap.fromTo(
+    '.grid-line.is-v',
+    {
+      scaleY: 0,
+    },
+    {
+      scaleY: 1,
+      stagger: 0.1,
+      duration: 2,
+      immediateRender: true,
+      ease: 'power4.inOut',
+    }
+  );
+}
+
+function initBackHome() {
+  let backHome = $('[data-back-to-home]');
+  let label = backHome.find('[data-back-label]');
+  let originalText = label.text();
+
+  backHome.hover(
+    function () {
+      animateScambleText(label, 'Back to home');
+    },
+    function () {
+      animateScambleText(label, originalText);
+    }
+  );
 }
 
 // Global
 function initSiteFunctionality() {
-  initSliders();
   initPageGap();
   initLenis();
+  initTimeCheck();
+  initGridReveal();
+  animateNav();
+  initCSSMarquee();
+  initBackHome();
   document.fonts.ready.then(function () {
     initMaskTextReveal('[data-split="heading"]');
+    initItemReveal('[data-item-reveal]');
   });
 }
 
+// Pages
 function initHomepage() {
+  initHpSlider();
   animateHomepageHero();
+  animateWorksLinks('.hp-hero_content-clients ul', '.hp-hero_links');
 }
 
 function initWork() {
@@ -506,10 +1226,21 @@ function initWork() {
 
 function initAbout() {
   infiniteScrollModule.init();
+  setTimeout(() => {
+    initGridReveal();
+    animateWorksLinks('.about_clients-list.cc-clients', '.about_clients-item');
+  }, 500);
+}
+
+function initWhy() {
+  initWhySwipers();
+}
+
+function initContact() {
+  initAdvancedFormValidation();
 }
 
 // Modular Barba.js implementation with work item transition
-
 $(document).ready(function () {
   // Set up initial page load without Barba
   const namespace = $('[data-barba="container"]').data('barba-namespace');
@@ -520,8 +1251,6 @@ $(document).ready(function () {
 });
 
 function runInitFunctions(namespace) {
-  console.log('Running init functions for namespace:', namespace);
-
   // Always run global functionality
   initSiteFunctionality();
 
@@ -532,11 +1261,19 @@ function runInitFunctions(namespace) {
     initWork();
   } else if (namespace === 'about') {
     initAbout();
+  } else if (namespace === 'why') {
+    initWhy();
+  } else if (namespace === 'contact') {
+    initContact();
   }
+
+  // Add transition styles
+  setTimeout(() => {
+    gsap.to('[data-barba=container]', { opacity: 1 });
+  }, 300);
 }
 
 function initBarba() {
-  // Add transition styles
   addTransitionStyles();
 
   // Variables for work item transition
@@ -545,10 +1282,9 @@ function initBarba() {
 
   // Initialize Barba with transitions
   barba.init({
-    wrapper: '#barba-wrapper',
-    container: '.barba-container',
     timeout: 7000,
     prefetchIgnore: true,
+    sync: true,
 
     // Define transitions
     transitions: [createWorkItemTransition(), createDefaultTransition()],
@@ -650,24 +1386,26 @@ function initBarba() {
 
       beforeEnter(data) {
         window.scrollTo(0, 0);
-      },
-
-      enter(data) {
-        return gsap.to(data.next.container, {
-          opacity: 1,
-          duration: 0.5,
+        gsap.set(data.next.container, {
+          opacity: 0,
+          visibility: 'visible', // Ensure it's visible but at 0 opacity
         });
       },
 
       after(data) {
-        const namespace = data.next.container.dataset.barbaNamespace;
         runInitFunctions(namespace);
-        pauseScroll(false);
-        document.documentElement.classList.remove('is-animating');
+        gsap.to(data.next.container, {
+          opacity: 1,
+          duration: 2,
+          onComplete: () => {
+            const namespace = data.next.container.dataset.barbaNamespace;
+            pauseScroll(false);
+            document.documentElement.classList.remove('is-animating');
+          },
+        });
       },
     };
   }
-
   function cloneWorkItem(trigger) {
     const clickedItem = $(trigger).closest('.work_slider-item');
 
@@ -810,14 +1548,7 @@ function initBarba() {
             })
           );
 
-          tl.add(
-            gsap.to(imgElement, {
-              scale: 1.4,
-              duration: 0.8,
-              ease: 'power2.inOut',
-            }),
-            0
-          ); // Start at the same time as the FLIP animation
+          // Start at the same time as the FLIP animation
         }, 100);
       } else {
         gsap.to(container, {
