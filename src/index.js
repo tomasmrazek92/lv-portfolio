@@ -2,40 +2,6 @@ import { infiniteScrollModule } from './about';
 gsap.registerPlugin(SplitText, ScrollTrigger);
 
 // Functions
-function initHpSlider() {
-  const hpSlider = new Swiper('.hp-work_slider-slider', {
-    spaceBetween: 1,
-    loop: true,
-    speed: 2000,
-    mousewheel: {
-      enabled: true,
-      forceToAxis: true,
-    },
-    loopAdditionalSlides: 6,
-    on: {
-      slideChange: (swiper) => {
-        updateHpSlider(swiper);
-      },
-      init: (swiper) => {
-        updateHpSlider(swiper);
-      },
-    },
-  });
-}
-
-function updateHpSlider(swiper) {
-  let index = swiper.realIndex;
-  let activeSlider = $(swiper.slides[index]);
-
-  let title = activeSlider.attr('data-title');
-  let location = activeSlider.attr('data-location');
-  let tags = activeSlider.attr('data-tags');
-
-  animateScambleText($('[data-tags-el]'), tags);
-  animateScambleText($('[data-location-el]'), location);
-  animateScambleText($('[data-title-el]'), title);
-}
-
 function initLenis() {
   let lenis;
   if (Webflow.env('editor') === undefined) {
@@ -709,7 +675,82 @@ function initAdvancedFormValidation() {
   });
 }
 
-// -- Anims
+// -- Nav
+function initNav() {
+  let hamOpen = $('[data-nav-toggle="open"]');
+  let hamClose = $('[data-nav-toggle="close"]');
+
+  let navbar = $('.nav_menu');
+  let logo = $('[data-menu-brand]');
+  let items = $('.nav_menu-item');
+  let subLinks = $('.nav_menu-sublinks li');
+  let navMeta = $('.nav_menu-meta');
+
+  // Init
+  logo.attr('data-text', logo.text());
+  gsap.set(navbar, { display: 'none' });
+  gsap.set([navbar, items, subLinks, navMeta], { opacity: 0 });
+  gsap.set(logo, { text: '' });
+
+  const menuAnimations = {
+    open: () => {
+      let tl = gsap.timeline();
+
+      animateScambleText(logo, logo.attr('data-text'));
+
+      tl.set(navbar, { display: 'flex' });
+      tl.to(navbar, { opacity: 1 });
+      tl.to(items, { opacity: 1, stagger: 0.1 });
+      tl.fromTo(
+        items.find('.nav_menu-item_list'),
+        { scale: 0 },
+        { scale: 1, stagger: 0.1 },
+        '<0.3'
+      );
+      tl.fromTo(
+        items.find('p'),
+        { yPercent: 300 },
+        { yPercent: 0, stagger: 0.1, duration: 0.6 },
+        '<'
+      );
+      tl.fromTo(
+        items.find('.w-embed'),
+        { xPercent: 300 },
+        { xPercent: 0, stagger: 0.1, duration: 0.6 },
+        '<'
+      );
+      tl.to([subLinks, navMeta], { opacity: 1, stagger: 0.2 }, '<');
+
+      return tl;
+    },
+
+    close: () => {
+      let tl = gsap.timeline();
+
+      tl.to([subLinks, navMeta], { opacity: 0, stagger: 0.1 });
+      tl.to(items.find('p'), { yPercent: 300, stagger: 0.1, duration: 0.6 }, '<');
+      tl.to(items.find('.nav_menu-item_list'), { scale: 0, stagger: 0.1 }, '<');
+      tl.to(items, { opacity: 0, stagger: 0.1 }, '<');
+      tl.to(navbar, { opacity: 0 }, '<0.4');
+      tl.set(navbar, { display: 'none' });
+
+      animateScambleText(logo, '');
+
+      return tl;
+    },
+  };
+
+  function openMenu() {
+    menuAnimations.open();
+  }
+
+  function closeMenu() {
+    menuAnimations.close();
+  }
+
+  hamOpen.on('click', openMenu);
+  hamClose.on('click', closeMenu);
+}
 function animateNav() {
   $('.nav_meta-col').each(function () {
     let links = $(this).find('a');
@@ -719,6 +760,21 @@ function animateNav() {
     initMaskTextReveal(pars);
     gsap.fromTo($('.nav_mode'), { scale: 0 }, { scale: 1 });
   });
+}
+
+function initBackHome() {
+  let backHome = $('[data-back-to-home]');
+  let label = backHome.find('[data-back-label]');
+  let originalText = label.text();
+
+  backHome.hover(
+    function () {
+      animateScambleText(label, 'Home, sweet home');
+    },
+    function () {
+      animateScambleText(label, originalText);
+    }
+  );
 }
 
 // -- Homepage
@@ -782,6 +838,88 @@ function animateWorksLinks(list, listitem) {
   );
 }
 
+function updateHpSlider(swiper) {
+  let index = swiper.realIndex;
+  let activeSlider = $(swiper.slides[index]);
+
+  let title = activeSlider.attr('data-title');
+  let location = activeSlider.attr('data-location');
+  let tags = activeSlider.attr('data-tags');
+
+  animateScambleText($('[data-tags-el]'), tags);
+  animateScambleText($('[data-location-el]'), location);
+  animateScambleText($('[data-title-el]'), title);
+}
+
+function initWorkScroll() {
+  if ($(window).width() >= 992) {
+    const items = $('.work_slider-item');
+    const itemCount = items.length;
+    const workWall = $('.work-wall');
+    const sliderRow = $('.hp-work_slider-row');
+    const totalWidth = itemCount * 100;
+    const dynamicHeight = totalWidth;
+
+    workWall.css('height', dynamicHeight + 'vh');
+
+    gsap.registerPlugin(ScrollTrigger);
+    gsap.to(sliderRow, {
+      xPercent: -(totalWidth - 100),
+      ease: 'none',
+      scrollTrigger: {
+        trigger: workWall,
+        start: 'top top',
+        end: 'bottom bottom',
+        scrub: 1,
+        pin: false,
+      },
+    });
+
+    const imgs = $('.work_slider-item img');
+
+    if (window.lenisInstance) {
+      let isScrolling = false;
+      let scrollTimeout;
+
+      window.lenisInstance.on('scroll', (e) => {
+        const velocity = Math.abs(e.velocity);
+        if (velocity > 1.2 && !isScrolling) {
+          isScrolling = true;
+
+          gsap.to(imgs, {
+            scale: 1.1,
+            duration: 1,
+            ease: 'power4.out',
+          });
+
+          gsap.to(items.find('.work_slider-item_visual'), {
+            scale: 0.8,
+            duration: 1,
+            ease: 'power4.out',
+          });
+        }
+
+        clearTimeout(scrollTimeout);
+
+        scrollTimeout = setTimeout(() => {
+          isScrolling = false;
+          gsap.to(imgs, {
+            scale: 1,
+            duration: 1,
+            ease: 'power4.out',
+          });
+          gsap.to(items.find('.work_slider-item_visual'), {
+            scale: 1,
+            duration: 1,
+            ease: 'power4.out',
+          });
+        }, 10);
+      });
+    }
+  }
+}
+
+// -- Works Page
 function animateWorkLoad() {
   var tl = gsap.timeline({});
 
@@ -926,6 +1064,7 @@ function animateWorkIcon() {
   );
 }
 
+// -- Anim Functions
 function animateScambleText(label, text) {
   let scrambleChars = '0123456789!@#$%^&*()_+<>?:|';
   gsap.to(label, {
@@ -1024,7 +1163,7 @@ function initMaskTextReveal(el) {
           tl.to(
             targets,
             {
-              yPercent: 0,
+              yPercent: -8,
               duration: config.duration,
               stagger: config.stagger,
               ease: 'expo.out',
@@ -1181,23 +1320,32 @@ function initGridReveal() {
   );
 }
 
-function initBackHome() {
-  let backHome = $('[data-back-to-home]');
-  let label = backHome.find('[data-back-label]');
-  let originalText = label.text();
+function initButtonCharacterStagger() {
+  const offsetIncrement = 0.01; // Transition offset increment in seconds
+  const buttons = document.querySelectorAll('[data-button-animate-chars]');
 
-  backHome.hover(
-    function () {
-      animateScambleText(label, 'Back to home');
-    },
-    function () {
-      animateScambleText(label, originalText);
-    }
-  );
+  buttons.forEach((button) => {
+    const text = button.textContent; // Get the button's text content
+    button.innerHTML = ''; // Clear the original content
+
+    [...text].forEach((char, index) => {
+      const span = document.createElement('span');
+      span.textContent = char;
+      span.style.transitionDelay = `${index * offsetIncrement}s`;
+
+      // Handle spaces explicitly
+      if (char === ' ') {
+        span.style.whiteSpace = 'pre'; // Preserve space width
+      }
+
+      button.appendChild(span);
+    });
+  });
 }
 
 // Global
 function initSiteFunctionality() {
+  initNav();
   initPageGap();
   initLenis();
   initTimeCheck();
@@ -1208,34 +1356,30 @@ function initSiteFunctionality() {
   document.fonts.ready.then(function () {
     initMaskTextReveal('[data-split="heading"]');
     initItemReveal('[data-item-reveal]');
+    initButtonCharacterStagger();
   });
 }
 
 // Pages
 function initHomepage() {
-  initHpSlider();
+  initWorkScroll();
   animateHomepageHero();
   animateWorksLinks('.hp-hero_content-clients ul', '.hp-hero_links');
 }
-
 function initWork() {
   animateWorkTimeline();
   animateWorkLoad();
   animateWorkIcon();
 }
-
 function initAbout() {
-  infiniteScrollModule.init();
   setTimeout(() => {
     initGridReveal();
     animateWorksLinks('.about_clients-list.cc-clients', '.about_clients-item');
   }, 500);
 }
-
 function initWhy() {
   initWhySwipers();
 }
-
 function initContact() {
   initAdvancedFormValidation();
 }
