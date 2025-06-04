@@ -4,7 +4,6 @@ import SwiperGL from './swiper-dist/swiper-gl.esm.js';
 gsap.registerPlugin(SplitText, ScrollTrigger);
 
 // Functions
-
 function initLenis() {
   if (window.lenisInstance) {
     window.lenisInstance.destroy();
@@ -210,6 +209,17 @@ function pauseScroll(state) {
   }
 }
 
+function stollToTop() {
+  $('[data-scroll-top]').on('click', function () {
+    if (window.lenisInstance) {
+      window.lenisInstance.scrollTo(0);
+    } else {
+      // If 'lenis' is not defined, fall back to the default browser scroll behavior.
+      window.scrollTo(0, 0);
+    }
+  });
+}
+
 function initTimeCheck() {
   function updateCETTime() {
     const now = new Date();
@@ -344,21 +354,172 @@ function initCSSMarquee() {
 }
 
 function handleAnchorScroll() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const anchorId = urlParams.get('anchor');
-
-  if (anchorId) {
+  function scrollToAnchor(anchorId, updateUrl = false) {
     const targetElement = document.getElementById(anchorId);
 
     if (targetElement && window.lenisInstance) {
-      setTimeout(() => {
+      const scrollAction = () => {
         window.lenisInstance.scrollTo(targetElement, {
           duration: 1,
           easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
         });
-      }, 100);
+      };
+
+      updateUrl ? scrollAction() : setTimeout(scrollAction, 100);
+
+      if (updateUrl) {
+        window.history.pushState({}, '', window.location.pathname + '?anchor=' + anchorId);
+      }
     }
   }
+
+  $(document).ready(function () {
+    const urlParams = new URLSearchParams(window.location.search);
+    const anchorId = urlParams.get('anchor');
+
+    if (anchorId) scrollToAnchor(anchorId);
+
+    $('a[href^="?anchor="], a[href^="#"], a[href*="' + window.location.pathname + '?anchor="]').on(
+      'click',
+      function (e) {
+        const href = $(this).attr('href');
+        let anchorId;
+
+        if (href.startsWith('#')) {
+          anchorId = href.substring(1);
+        } else if (href.includes('?anchor=')) {
+          const urlParts = href.split('?');
+          const currentPath = window.location.pathname;
+          const linkPath = urlParts[0] || currentPath;
+
+          if (linkPath === currentPath || linkPath === '') {
+            e.preventDefault();
+            anchorId = new URLSearchParams(urlParts[1]).get('anchor');
+          }
+        }
+
+        if (anchorId) {
+          scrollToAnchor(anchorId, true);
+        }
+      }
+    );
+  });
+}
+
+function initClipboardCopy() {
+  $('[data-copy-clipboard]').on('click', function () {
+    const targetId = $(this).attr('data-copy-clipboard');
+    const $target = $(`[data-copy-clipboard="${targetId}"]`).find('.line');
+
+    if ($target.length) {
+      const originalText = $target.text();
+
+      const showTooltip = () => {
+        const $tooltip = $('<div class="copy-tooltip">Copied</div>');
+        $tooltip.css({
+          position: 'absolute',
+          background: 'var(--body-2)',
+          color: 'var(--text-2)',
+          padding: '.5em 1em',
+          borderRadius: '.25em',
+          fontSize: '1.5rem',
+          whiteSpace: 'nowrap',
+          zIndex: 9999,
+          pointerEvents: 'none',
+        });
+
+        const targetOffset = $target.offset();
+        $tooltip.css({
+          top: targetOffset.top - 40,
+          left: targetOffset.left + $target.outerWidth() / 2 - $tooltip.outerWidth() / 2,
+        });
+
+        $('body').append($tooltip);
+
+        setTimeout(() => {
+          $tooltip.remove();
+        }, 1500);
+      };
+
+      navigator.clipboard
+        .writeText(originalText)
+        .then(() => {
+          showTooltip();
+        })
+        .catch(() => {
+          const textArea = document.createElement('textarea');
+          textArea.value = originalText;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+
+          showTooltip();
+        });
+    }
+  });
+}
+
+function resetWebflow(data) {
+  let dom = $(new DOMParser().parseFromString(data.next.html, 'text/html')).find('html');
+  // reset webflow interactions
+  $('html').attr('data-wf-page', dom.attr('data-wf-page'));
+  window.Webflow && window.Webflow.destroy();
+  window.Webflow && window.Webflow.ready();
+  window.Webflow && window.Webflow.require('ix2').init();
+  // reset w--current class
+  $('.w--current').removeClass('w--current');
+  $('a').each(function () {
+    if ($(this).attr('href') === window.location.pathname) {
+      $(this).addClass('w--current');
+    }
+  });
+  // Reset scripts
+  dom.find('[data-barba-script]').each(function () {
+    let codeString = $(this).text();
+
+    // Remove "DOMContentLoaded" event listener if present
+    if (codeString.includes('DOMContentLoaded')) {
+      let newCodeString = codeString.replace(
+        /window\.addEventListener\("DOMContentLoaded",\s*\(\s*event\s*\)\s*=>\s*{\s*/,
+        ''
+      );
+      codeString = newCodeString.replace(/\s*}\s*\);\s*$/, '');
+    }
+
+    // Check if the script has a src attribute
+    let src = $(this).attr('src');
+
+    // Remove existing scripts with the same src or text content
+    if (src) {
+      // Remove scripts with the same src
+      $('script[src]')
+        .filter(function () {
+          return $(this).attr('src') === src;
+        })
+        .remove();
+    } else {
+      // Remove inline scripts with the same content
+      $('script:not([src])')
+        .filter(function () {
+          return $(this).text().trim() === codeString.trim();
+        })
+        .remove();
+    }
+
+    // Append the new script
+    let script = document.createElement('script');
+    script.type = 'text/javascript';
+    if (src) {
+      script.src = src;
+    } else {
+      script.text = codeString;
+    }
+
+    document.body.appendChild(script);
+  });
+
+  ScrollTrigger.refresh();
 }
 
 // -- Nav
@@ -975,7 +1136,7 @@ function initWhySwipers() {
       crossFade: true,
     },
     loop: true,
-    speed: 600,
+    speed: 200,
     pagination: {
       el: '.swiper-nav.cc-quotes',
       bulletClass: 'swiper-dot',
@@ -1581,9 +1742,9 @@ function initGridReveal() {
     {
       scaleX: 1,
       stagger: 0.1,
-      duration: 3,
+      duration: 6,
       immediateRender: true,
-      ease: 'power4.inOut',
+      ease: 'power4.out',
     }
   );
 
@@ -1626,15 +1787,17 @@ function initButtonCharacterStagger() {
 }
 
 // Global
-function initSiteFunctionality() {
+function initSiteFunctionality(data) {
   initNav();
   initPageGap();
   initLenis();
+  stollToTop();
   initTimeCheck();
   initGridReveal();
   animateNav();
   initCSSMarquee();
   initBackHome();
+  initClipboardCopy();
   document.fonts.ready.then(function () {
     initMaskTextReveal('[data-split="heading"]');
     initItemReveal('[data-item-reveal]');
@@ -1674,15 +1837,22 @@ function initContact() {
 $(document).ready(function () {
   // Set up initial page load without Barba
   const namespace = $('[data-barba="container"]').data('barba-namespace');
-  runInitFunctions(namespace);
+  runInitFunctions();
 
   // Initialize Barba transitions
   initBarba();
 });
 
-function runInitFunctions(namespace) {
+function runInitFunctions(data) {
   // Always run global functionality
   initSiteFunctionality();
+
+  // Check for page functionality
+  const namespace =
+    data?.next?.container?.dataset?.barbaNamespace ||
+    $('[data-barba="container"]').data('barba-namespace');
+
+  console.log(namespace);
 
   // Run page-specific code
   if (namespace === 'home') {
@@ -1776,8 +1946,7 @@ function initBarba() {
           scaleY: 0,
           duration: 1,
           onStart: () => {
-            const namespace = data.next.container.dataset.barbaNamespace;
-            runInitFunctions(namespace);
+            runInitFunctions(data);
           },
         },
         '-=0.3'
@@ -1827,6 +1996,7 @@ function initBarba() {
         pauseScroll(false);
         document.documentElement.classList.remove('is-animating');
         handleAnchorScroll();
+        resetWebflow(data);
       },
     };
   }
@@ -1898,8 +2068,7 @@ function initBarba() {
       // After transition
       after(data) {
         animateCloneToTarget(data.next.container);
-        const namespace = data.next.container.dataset.barbaNamespace;
-        runInitFunctions(namespace);
+        runInitFunctions(data);
         pauseScroll(false);
         document.documentElement.classList.remove('is-animating');
       },
