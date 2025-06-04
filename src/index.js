@@ -170,11 +170,41 @@ function pauseScroll(state) {
   if (window.lenisInstance) {
     if (state === true) {
       window.lenisInstance.stop();
+      disableScroll();
       lenisInstance.scrollTo(0);
     } else {
       window.lenisInstance.start();
       lenisInstance.scrollTo(0);
+      enableScroll();
     }
+  }
+
+  var $body = $('body');
+  var scrollPosition = 0;
+  var isScrollDisabled = false;
+  var currentBreakpoint = '';
+
+  function disableScroll() {
+    var oldWidth = $('body').innerWidth();
+    scrollPosition = window.pageYOffset;
+    $('body').css({
+      overflow: 'hidden',
+      position: 'fixed',
+      top: `-${scrollPosition}px`,
+      width: oldWidth,
+    });
+    isScrollDisabled = true;
+  }
+
+  function enableScroll() {
+    $('body').css({
+      overflow: '',
+      position: '',
+      top: '',
+      width: '',
+    });
+    $(window).scrollTop(scrollPosition);
+    isScrollDisabled = false;
   }
 }
 
@@ -1695,10 +1725,6 @@ function initBarba() {
       let nextPreloader = $(data.next.container).find('.page-transition');
       let tl = gsap.timeline({ defaults: { duration: 0.6, ease: 'power2.inOut' } });
 
-      tl.call(() => {
-        window.scrollTo(0, 0);
-      });
-
       tl.set([data.current.container, data.next.container], {
         position: 'fixed',
         top: 0,
@@ -1861,7 +1887,6 @@ function initBarba() {
 
       // Before entering new page
       beforeEnter(data) {
-        window.scrollTo(0, 0);
         gsap.set(data.next.container, {
           opacity: 0,
           visibility: 'visible',
