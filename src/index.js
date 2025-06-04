@@ -474,52 +474,6 @@ function resetWebflow(data) {
       $(this).addClass('w--current');
     }
   });
-  // Reset scripts
-  dom.find('[data-barba-script]').each(function () {
-    let codeString = $(this).text();
-
-    // Remove "DOMContentLoaded" event listener if present
-    if (codeString.includes('DOMContentLoaded')) {
-      let newCodeString = codeString.replace(
-        /window\.addEventListener\("DOMContentLoaded",\s*\(\s*event\s*\)\s*=>\s*{\s*/,
-        ''
-      );
-      codeString = newCodeString.replace(/\s*}\s*\);\s*$/, '');
-    }
-
-    // Check if the script has a src attribute
-    let src = $(this).attr('src');
-
-    // Remove existing scripts with the same src or text content
-    if (src) {
-      // Remove scripts with the same src
-      $('script[src]')
-        .filter(function () {
-          return $(this).attr('src') === src;
-        })
-        .remove();
-    } else {
-      // Remove inline scripts with the same content
-      $('script:not([src])')
-        .filter(function () {
-          return $(this).text().trim() === codeString.trim();
-        })
-        .remove();
-    }
-
-    // Append the new script
-    let script = document.createElement('script');
-    script.type = 'text/javascript';
-    if (src) {
-      script.src = src;
-    } else {
-      script.text = codeString;
-    }
-
-    document.body.appendChild(script);
-  });
-
-  ScrollTrigger.refresh();
 }
 
 // -- Nav
@@ -951,9 +905,12 @@ function animateWorkTimeline() {
 
   tl.to('.work-d_hero-timeline-inner', {
     y: () => {
-      let containerHeight = $('.work-d_hero-timeline-inner').height();
-      let itemHeight = $('.work-d_hero-timeline_item').first().outerHeight(true);
-      return -(containerHeight - itemHeight) + 'px';
+      let container = $('.work-d_hero-timeline-inner');
+      let containerHeight = container.outerHeight(true);
+      let items = $('.work-d_hero-timeline_item');
+      let itemHeight = items.first().outerHeight(true);
+
+      return -containerHeight + itemHeight + 'px';
     },
     ease: 'none',
   });
@@ -972,23 +929,6 @@ function animateWorkTimeline() {
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     });
-  });
-
-  // Active State
-  let tl1 = gsap.timeline({
-    scrollTrigger: {
-      trigger: '.section.cc-work-d-content',
-      start: 'top bottom',
-      end: 'top bottom',
-      markers: true,
-      onEnterBack: () => {
-        gsap.to($('.work-d_hero-timeline-active'), { height: '10.8rem', y: 0 });
-      },
-      onLeave: () => {
-        let itemHeight = $('.work-d_hero-timeline_item').first().outerHeight(true);
-        gsap.to($('.work-d_hero-timeline-active'), { height: '1px', y: itemHeight + 3 + 'px' });
-      },
-    },
   });
 }
 
@@ -1897,29 +1837,12 @@ function initBarba() {
       let nextPreloader = $(data.next.container).find('.page-transition');
       let tl = gsap.timeline({ defaults: { duration: 0.6, ease: 'power2.inOut' } });
 
-      tl.set([data.current.container, data.next.container], {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100vh',
-        overflow: 'hidden',
-      });
-
-      tl.set(html, { backgroundColor: '#4C4C4C' });
-
-      tl.set(data.next.container, {
-        scale: 0.8,
-        zIndex: 2,
-      });
-
-      tl.set(data.current.container, {
-        zIndex: 1,
-      });
-
       tl.to(currPreloader, {
         scaleY: 1,
         duration: 0.4,
+        onComplete: () => {
+          pauseScroll(true);
+        },
       });
 
       tl.to(
@@ -1927,6 +1850,27 @@ function initBarba() {
         {
           scale: 0.8,
           duration: 0.5,
+          onStart: () => {
+            gsap.set([data.current.container, data.next.container], {
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100vh',
+              overflow: 'hidden',
+            });
+
+            gsap.set(html, { backgroundColor: '#4C4C4C' });
+
+            gsap.set(data.next.container, {
+              scale: 0.8,
+              zIndex: 2,
+            });
+
+            gsap.set(data.current.container, {
+              zIndex: 1,
+            });
+          },
         },
         '-=0.1'
       );
@@ -1985,7 +1929,6 @@ function initBarba() {
 
       before(data) {
         document.documentElement.classList.add('is-animating');
-        pauseScroll(true);
       },
 
       async enter(data) {
