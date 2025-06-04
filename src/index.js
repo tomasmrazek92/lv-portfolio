@@ -402,10 +402,12 @@ function initNav() {
 
   function openMenu() {
     menuAnimations.open();
+    pauseScroll(true);
   }
 
   function closeMenu() {
     menuAnimations.close();
+    pauseScroll(false);
   }
 
   hamOpen.on('click', openMenu);
