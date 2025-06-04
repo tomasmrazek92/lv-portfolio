@@ -311,6 +311,24 @@ function initCSSMarquee() {
   initAll();
 }
 
+function handleAnchorScroll() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const anchorId = urlParams.get('anchor');
+
+  if (anchorId) {
+    const targetElement = document.getElementById(anchorId);
+
+    if (targetElement && window.lenisInstance) {
+      setTimeout(() => {
+        window.lenisInstance.scrollTo(targetElement, {
+          duration: 1,
+          easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        });
+      }, 100);
+    }
+  }
+}
+
 // -- Nav
 function initNav() {
   let hamOpen = $('[data-nav-toggle="open"]');
@@ -322,8 +340,7 @@ function initNav() {
   let subLinks = $('.nav_menu-sublinks li');
   let navMeta = $('.nav_menu-meta');
 
-  // Init
-  logo.attr('data-text', logo.text());
+  // Init;
   gsap.set(navbar, { display: 'none' });
   gsap.set([navbar, items, subLinks, navMeta], { opacity: 0 });
   gsap.set(logo, { text: '' });
@@ -332,7 +349,7 @@ function initNav() {
     open: () => {
       let tl = gsap.timeline();
 
-      animateScambleText(logo, logo.attr('data-text'));
+      animateScambleText(logo, logo.attr('data-menu-text'));
 
       tl.set(navbar, { display: 'flex' });
       tl.set(hamClose, { yPercent: 100 });
@@ -1630,7 +1647,6 @@ $(document).ready(function () {
 });
 
 function runInitFunctions(namespace) {
-  console.log(namespace);
   // Always run global functionality
   initSiteFunctionality();
 
@@ -1780,6 +1796,7 @@ function initBarba() {
       async after(data) {
         pauseScroll(false);
         document.documentElement.classList.remove('is-animating');
+        handleAnchorScroll();
       },
     };
   }
