@@ -4,7 +4,13 @@ import SwiperGL from './swiper-dist/swiper-gl.esm.js';
 gsap.registerPlugin(SplitText, ScrollTrigger);
 
 // Functions
+
 function initLenis() {
+  if (window.lenisInstance) {
+    window.lenisInstance.destroy();
+    window.lenisInstance = null;
+  }
+
   let lenis;
   if (Webflow.env('editor') === undefined) {
     lenis = new Lenis({
@@ -14,6 +20,7 @@ function initLenis() {
       normalizeWheel: false,
       smoothTouch: false,
     });
+
     function raf(time) {
       lenis.raf(time);
       requestAnimationFrame(raf);
@@ -21,38 +28,33 @@ function initLenis() {
     requestAnimationFrame(raf);
     window.lenisInstance = lenis;
   }
-  $('[data-lenis-start]').on('click', function () {
-    lenis.start();
-  });
-  $('[data-lenis-stop]').on('click', function () {
-    lenis.stop();
-  });
-  $('[data-lenis-toggle]').on('click', function () {
-    $(this).toggleClass('stop-scroll');
-    if ($(this).hasClass('stop-scroll')) {
-      lenis.stop();
-    } else {
+
+  $('[data-lenis-start]')
+    .off('click')
+    .on('click', function () {
       lenis.start();
-    }
-  });
+    });
+  $('[data-lenis-stop]')
+    .off('click')
+    .on('click', function () {
+      lenis.stop();
+    });
+  $('[data-lenis-toggle]')
+    .off('click')
+    .on('click', function () {
+      $(this).toggleClass('stop-scroll');
+      if ($(this).hasClass('stop-scroll')) {
+        lenis.stop();
+      } else {
+        lenis.start();
+      }
+    });
 
-  // Watch for height changes in the body element
   const { body } = document;
-
   const observer = new ResizeObserver(() => {
     lenis.resize();
   });
-
-  // Start observing the body
   observer.observe(body);
-
-  // Lenis animation loop
-  function raf(time) {
-    lenis.raf(time);
-    requestAnimationFrame(raf);
-  }
-
-  requestAnimationFrame(raf);
 }
 
 function initPageGap() {
