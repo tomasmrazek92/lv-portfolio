@@ -463,7 +463,6 @@ function initClipboardCopy() {
 function resetWebflow(data) {
   let dom = $(new DOMParser().parseFromString(data.next.html, 'text/html')).find('html');
   // reset webflow interactions
-  $('html').attr('data-wf-page', dom.attr('data-wf-page'));
   window.Webflow && window.Webflow.destroy();
   window.Webflow && window.Webflow.ready();
   window.Webflow && window.Webflow.require('ix2').init();
@@ -574,7 +573,8 @@ function animateNav() {
 function initBackHome() {
   let backHome = $('[data-back-to-home]');
   let label = backHome.find('[data-back-label]');
-  let originalText = label.text();
+  label.attr('data-original-test', label.text());
+  let originalText = label.attr('data-original-test');
 
   backHome.hover(
     function () {
@@ -733,6 +733,14 @@ function initDynamicCustomTextCursor() {
         // Recalculate edge awareness whenever the text changes
         let cursorEdgeThreshold = getCursorEdgeThreshold();
       }
+
+      if (target.tagName !== 'A') {
+        cursorItem.style.backgroundColor = 'var(--text-3)';
+        cursorItem.style.color = 'var(--body-2)';
+      } else {
+        cursorItem.style.backgroundColor = '';
+        cursorItem.style.color = '';
+      }
     });
   });
 }
@@ -819,7 +827,7 @@ function animateWorkLoad() {
   let visualWrap = '.work-d_hero-wrap.cc-images';
   let visualList = '.work-d_hero-wrap.cc-images .work-d_hero-list';
   let visualItem = '.work-d_hero-wrap.cc-images .work-d_hero-list-item';
-  let timeline = '.work-d_hero-timeline';
+  let timeline = '.work-d_hero-timeline-box';
 
   tl.set(
     [timeline],
@@ -881,54 +889,155 @@ function animateWorkLoad() {
 }
 
 function animateWorkTimeline() {
-  let wrap = $('.work-d_hero-part.cc-images');
-  let firstItem = $('.work-d_hero-list-item').first();
-  let lastItem = $('.work-d_hero-list-item').last();
+  let scrollTriggerInstance;
 
-  let tl = gsap.timeline({
-    scrollTrigger: {
-      trigger: wrap,
+  function initializeTimeline() {
+    // Kill existing ScrollTrigger if it exists
+    if (scrollTriggerInstance) {
+      scrollTriggerInstance.kill();
+    }
+
+    // Recalculate all variables on each initialization
+    let wrap = $('.work-d_hero-part.cc-images');
+    let list = $('.work-d_hero-list');
+    let items = $('.work-d_hero-list-item');
+    let timeline = $('.work-d_hero-timeline');
+    let timelineInner = $('.work-d_hero-timeline-inner');
+    let firstItem = items.first();
+    let lastItem = items.last();
+
+    const timelineItems = $('.work-d_hero-timeline_item');
+
+    // Set initial position
+    gsap.set(timelineInner, { y: 0, x: 0 }); // Reset both axes
+
+    scrollTriggerInstance = ScrollTrigger.create({
+      trigger: wrap[0],
+      onEnter: () => {
+        timeline.addClass('cc-active');
+      },
+      onEnterBack: () => {
+        timeline.addClass('cc-active');
+      },
+      onLeave: () => {
+        timeline.removeClass('cc-active');
+      },
+      onLeaveBack: () => {
+        timeline.removeClass('cc-active');
+      },
       start: () => {
-        let firstItemCenter = firstItem.outerHeight() / 2;
-        console.log(firstItemCenter);
-        return firstItemCenter + 'px center';
+        const firstItemTop = firstItem.offset().top;
+        const firstItemHeight = firstItem.outerHeight();
+        const firstItemCenter = firstItemTop - firstItemHeight / 2;
+        return 0 + 'px center';
       },
       end: () => {
-        let lastItemCenter = lastItem.offset().top + lastItem.outerHeight() / 2;
-        let wrapTop = wrap.offset().top;
-        return lastItemCenter - wrapTop + 'px center';
+        const listHeight = list.outerHeight();
+        const lastItemHeight = lastItem.outerHeight();
+        const lastItemCenter = listHeight - lastItemHeight / 2;
+        return lastItemCenter + 'px center';
       },
-      scrub: true,
+      scrub: 0,
       markers: true,
-    },
-  });
+      onUpdate: (self) => {
+        // Check screen size
+        const isSmallScreen = $(window).width() < 992;
 
-  tl.to('.work-d_hero-timeline-inner', {
-    y: () => {
-      let container = $('.work-d_hero-timeline-inner');
-      let containerHeight = container.outerHeight(true);
-      let items = $('.work-d_hero-timeline_item');
-      let itemHeight = items.first().outerHeight(true);
+        // Use fresh calculations each time
+        const windowHeight = $(window).height();
+        const windowScrollTop = $(window).scrollTop();
+        const viewportCenter = windowScrollTop + windowHeight / 2;
 
-      return -containerHeight + itemHeight + 'px';
-    },
-    ease: 'none',
-  });
+        const firstItemTop = firstItem.offset().top;
+        const firstItemHeight = firstItem.outerHeight();
+        const firstItemCenter = firstItemTop + firstItemHeight / 2;
 
-  $('.work-d_hero-timeline_item').on('click', function () {
-    let index = $(this).index();
-    let targetElement = $('.work-d_hero-list-item').eq(index);
+        if (viewportCenter < firstItemCenter) {
+          gsap.set(timelineInner, { y: 0, x: 0 });
+          timelineItems.removeClass('active');
+          timelineItems.eq(0).addClass('active');
+          return;
+        }
 
-    let targetPosition = targetElement.offset().top;
-    let targetHeight = targetElement.outerHeight();
-    let windowHeight = $(window).height();
+        let imageProgress = 0;
 
-    let centeredPosition = targetPosition - windowHeight / 2 + targetHeight / 2;
+        items.each(function (index) {
+          const $item = $(this);
+          const itemTop = $item.offset().top;
+          const itemHeight = $item.outerHeight();
+          const itemCenter = itemTop + itemHeight / 2;
 
-    lenisInstance.scrollTo(centeredPosition, {
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+          if (viewportCenter < itemCenter) {
+            return false;
+          }
+          imageProgress += 1;
+        });
+
+        imageProgress = Math.max(0, imageProgress - 1);
+
+        const currentImageIndex = imageProgress;
+        if (currentImageIndex < items.length - 1) {
+          const currentItem = items.eq(currentImageIndex);
+          const nextItem = items.eq(currentImageIndex + 1);
+
+          if (currentItem.length && nextItem.length) {
+            const currentCenter = currentItem.offset().top + currentItem.outerHeight() / 2;
+            const nextCenter = nextItem.offset().top + nextItem.outerHeight() / 2;
+
+            if (viewportCenter > currentCenter) {
+              const progressToNext =
+                (viewportCenter - currentCenter) / (nextCenter - currentCenter);
+              imageProgress += Math.min(1, Math.max(0, progressToNext));
+            }
+          }
+        }
+
+        // Responsive movement: Y-axis for large screens, X-axis for small screens
+        if (isSmallScreen) {
+          // X-axis movement for screens < 992px
+          const currentItemWidth = timelineItems.first().outerWidth(true);
+          const translateX = imageProgress * currentItemWidth;
+          gsap.set(timelineInner, { x: -translateX, y: 0 });
+        } else {
+          // Y-axis movement for screens >= 992px
+          const currentItemHeight = timelineItems.first().outerHeight(true);
+          const translateY = imageProgress * currentItemHeight;
+          gsap.set(timelineInner, { y: -translateY, x: 0 });
+        }
+      },
     });
+
+    // Click handler remains the same
+    $(document).off('click.workTimeline', '.work-d_hero-timeline_item');
+    $(document).on('click.workTimeline', '.work-d_hero-timeline_item', function () {
+      let index = $(this).index();
+      let targetElement = items.eq(index);
+
+      if (targetElement.length) {
+        let targetPosition = targetElement.offset().top;
+        let targetHeight = targetElement.outerHeight();
+        let windowHeight = $(window).height();
+        let centeredPosition = targetPosition + targetHeight / 2 - windowHeight / 2;
+
+        if (typeof lenisInstance !== 'undefined' && lenisInstance.scrollTo) {
+          lenisInstance.scrollTo(centeredPosition, {
+            duration: 1.2,
+            easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+          });
+        } else {
+          $('html, body').animate({ scrollTop: Math.max(0, centeredPosition) }, 1200);
+        }
+      }
+    });
+  }
+
+  // Initialize on load
+  initializeTimeline();
+
+  // Reinitialize on resize
+  $(window).off('resize.workTimeline');
+  $(window).on('resize.workTimeline', function () {
+    setTimeout(initializeTimeline, 100);
   });
 }
 
@@ -990,21 +1099,21 @@ function initAboutImgs() {
     function addNewLayer() {
       currentLayer++;
       const rotation = Math.random() * 10 - 5;
-      const finalScale = Math.pow(0.99, currentLayer + 1);
+      const finalScale = Math.pow(0.7, currentLayer + 1);
       const initialScale = finalScale * 0.99;
       const randomIndex = shuffledIndexes[currentLayer];
       const $targetImage = $images.eq(randomIndex);
 
       gsap.set($targetImage[0], {
         opacity: 0,
-        scale: initialScale,
+        scale: 0.8,
         rotation: rotation + 2,
         zIndex: currentLayer + 10,
       });
 
       gsap.to($targetImage[0], {
         opacity: 1,
-        scale: finalScale,
+        scale: 0.7,
         rotation: rotation,
         duration: 0.6,
         ease: 'back.out(1.2)',
@@ -1792,8 +1901,6 @@ function runInitFunctions(data) {
     data?.next?.container?.dataset?.barbaNamespace ||
     $('[data-barba="container"]').data('barba-namespace');
 
-  console.log(namespace);
-
   // Run page-specific code
   if (namespace === 'home') {
     initHomepage();
@@ -1822,7 +1929,7 @@ function initBarba() {
 
   // Initialize Barba with transitions
   barba.init({
-    timeout: 7000,
+    timeout: 15000,
     prefetchIgnore: true,
     sync: true,
 
@@ -1936,10 +2043,10 @@ function initBarba() {
       },
 
       async after(data) {
+        console.log('after');
         pauseScroll(false);
         document.documentElement.classList.remove('is-animating');
         handleAnchorScroll();
-        resetWebflow(data);
       },
     };
   }
