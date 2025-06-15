@@ -1,5 +1,6 @@
-import { infiniteScrollModule } from './about';
-import SwiperGL from './swiper-dist/swiper-gl.esm.js';
+import * as THREE from 'three';
+
+import { fragmentShader, vertexShader } from './three/shaders.js';
 
 gsap.registerPlugin(SplitText, ScrollTrigger);
 
@@ -80,56 +81,56 @@ function initPageGap() {
     // Add CSS for our frames
     const style = document.createElement('style');
     style.innerHTML = `
-      .site-frame-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 9999;
-      }
-      
-      .site-frame {
-        position: absolute;
-        background-color: var(--body-2);
-        transition: transform 0.3s ease;
-      }
-      
-      .site-frame-top, .site-frame-bottom {
-        left: 0;
-        width: 100%;
-        height: 5px;
-        transform: scaleY(var(--gap-size));
-      }
-      
-      .site-frame-top {
-        top: 0;
-        transform-origin: top center;
-      }
-      
-      .site-frame-bottom {
-        bottom: 0;
-        transform-origin: bottom center;
-      }
-      
-      .site-frame-left, .site-frame-right {
-        top: 0;
-        height: 100%;
-        width: 5px;
-        transform: scaleX(var(--gap-size));
-      }
-      
-      .site-frame-left {
-        left: 0;
-        transform-origin: left center;
-      }
-      
-      .site-frame-right {
-        right: 0;
-        transform-origin: right center;
-      }
-    `;
+    .site-frame-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+    }
+    
+    .site-frame {
+      position: absolute;
+      background-color: var(--body-2);
+      transition: transform 0.3s ease;
+    }
+    
+    .site-frame-top, .site-frame-bottom {
+      left: 0;
+      width: 100%;
+      height: 5px;
+      transform: scaleY(var(--gap-size));
+    }
+    
+    .site-frame-top {
+      top: 0;
+      transform-origin: top center;
+    }
+    
+    .site-frame-bottom {
+      bottom: 0;
+      transform-origin: bottom center;
+    }
+    
+    .site-frame-left, .site-frame-right {
+      top: 0;
+      height: 100%;
+      width: 5px;
+      transform: scaleX(var(--gap-size));
+    }
+    
+    .site-frame-left {
+      left: 0;
+      transform-origin: left center;
+    }
+    
+    .site-frame-right {
+      right: 0;
+      transform-origin: right center;
+    }
+  `;
     document.head.appendChild(style);
   }
 
@@ -461,11 +462,13 @@ function initClipboardCopy() {
 }
 
 function resetWebflow(data) {
-  let dom = $(new DOMParser().parseFromString(data.next.html, 'text/html')).find('html');
   // reset webflow interactions
   window.Webflow && window.Webflow.destroy();
   window.Webflow && window.Webflow.ready();
-  window.Webflow && window.Webflow.require('ix2').init();
+  window.Webflow &&
+    window.Webflow.require &&
+    window.Webflow.require('ix2') &&
+    window.Webflow.require('ix2').init();
   // reset w--current class
   $('.w--current').removeClass('w--current');
   $('a').each(function () {
@@ -475,6 +478,289 @@ function resetWebflow(data) {
   });
 }
 
+const VideoModal = {
+  isOpen: false,
+  $overlay: null,
+  $container: null,
+  $videoWrapper: null,
+  $originalElement: null,
+  originalMaxWidth: null,
+  originalPlayer: null,
+  modalPlayer: null,
+
+  init() {
+    this.initOriginalPlyr();
+    this.bindEvents();
+    this.addStyles();
+  },
+
+  initOriginalPlyr() {
+    const $videoEl = $('.hp-hero_content-visual .plyr_video');
+    if ($videoEl.length) {
+      this.originalPlayer = new Plyr($videoEl[0], {
+        controls: ['play', 'progress', 'mute', 'fullscreen'],
+        muted: true,
+        autoplay: true,
+        loop: { active: true },
+      });
+
+      $('.plyr__controls').hide();
+
+      this.originalPlayer.on('ready', () => {
+        setTimeout(() => {
+          this.originalPlayer.play();
+          this.originalPlayer.muted = true;
+        }, 100);
+      });
+
+      this.originalPlayer.on('loadeddata', () => {
+        this.originalPlayer.play();
+      });
+    }
+  },
+
+  bindEvents() {
+    $('.hp-hero_content-visual').click((e) => {
+      e.preventDefault();
+      this.open($(e.currentTarget));
+    });
+  },
+
+  open($element) {
+    if (this.isOpen) return;
+
+    this.$originalElement = $element;
+    this.originalMaxWidth = $element.css('max-width');
+
+    pauseScroll(true);
+    $element.css('max-width', 'none');
+
+    this.createElement();
+    this.setupModal($element);
+    this.animateIn();
+
+    this.isOpen = true;
+  },
+
+  close() {
+    if (!this.isOpen) return;
+
+    this.pauseVideo();
+    this.animateOut();
+  },
+
+  createElement() {
+    this.$overlay = $('<div class="video-modal-overlay"></div>');
+    this.$container = $('<div class="video-modal-container"></div>');
+    this.$videoWrapper = $('<div class="video-modal-wrapper"></div>');
+    const $closeBtn = $('<div class="video-modal-close">×</div>');
+
+    this.$videoWrapper.append($closeBtn);
+    this.$container.append(this.$videoWrapper);
+    this.$overlay.append(this.$container);
+    $('body').append(this.$overlay);
+
+    this.bindCloseEvents($closeBtn);
+  },
+
+  setupModal($element) {
+    const elementRect = $element[0].getBoundingClientRect();
+    const aspectRatio = $element.attr('data-video-player') || '16/9';
+
+    this.$container.css({
+      position: 'fixed',
+      left: elementRect.left + 'px',
+      top: elementRect.top + 'px',
+      width: elementRect.width + 'px',
+      height: elementRect.height + 'px',
+      zIndex: 9999,
+    });
+
+    this.$videoWrapper.css('aspect-ratio', aspectRatio);
+
+    const $clonedElement = $element.clone(true);
+    $clonedElement.find('.plyr').replaceWith($clonedElement.find('video'));
+    this.$videoWrapper.append($clonedElement);
+    $element.css('visibility', 'hidden');
+  },
+
+  animateIn() {
+    gsap.set(this.$overlay, { opacity: 0 });
+    gsap.to(this.$overlay, { opacity: 1, duration: 0.3 });
+
+    gsap.to(this.$container, {
+      left: '5vw',
+      top: '5vh',
+      width: '90vw',
+      height: '90vh',
+      duration: 0.6,
+      ease: 'power2.out',
+      onComplete: () => this.activateModalVideo(),
+    });
+  },
+
+  activateModalVideo() {
+    const $clonedElement = this.$videoWrapper.find('.hp-hero_content-visual');
+    const $videoEl = $clonedElement.find('.plyr_video');
+
+    if ($videoEl.length) {
+      this.modalPlayer = new Plyr($videoEl[0], {
+        controls: ['play', 'progress', 'mute', 'fullscreen'],
+        muted: false,
+        autoplay: false,
+        loop: { active: true },
+      });
+
+      this.modalPlayer.on('ready', () => {
+        setTimeout(() => {
+          this.modalPlayer.restart();
+          this.modalPlayer.muted = false;
+          this.modalPlayer.play().catch(() => {
+            console.log('Autoplay prevented - user interaction required');
+          });
+        }, 100);
+      });
+    }
+  },
+
+  animateOut() {
+    const elementRect = this.$originalElement[0].getBoundingClientRect();
+
+    gsap.to(this.$container, {
+      left: elementRect.left + 'px',
+      top: elementRect.top + 'px',
+      width: elementRect.width + 'px',
+      height: elementRect.height + 'px',
+      duration: 0.4,
+      ease: 'power2.in',
+    });
+
+    gsap.to(this.$overlay, {
+      opacity: 0,
+      duration: 0.3,
+      delay: 0.2,
+      onComplete: () => this.cleanup(),
+    });
+  },
+
+  cleanup() {
+    this.$overlay.remove();
+    this.$originalElement.css({
+      visibility: 'visible',
+      'max-width': this.originalMaxWidth,
+    });
+
+    if (this.modalPlayer) {
+      this.modalPlayer.destroy();
+      this.modalPlayer = null;
+    }
+
+    pauseScroll(false);
+    $(document).off('keydown.videoModal');
+    this.resetProperties();
+  },
+
+  resetProperties() {
+    this.isOpen = false;
+    this.$overlay = null;
+    this.$container = null;
+    this.$videoWrapper = null;
+    this.$originalElement = null;
+    this.originalMaxWidth = null;
+  },
+
+  bindCloseEvents($closeBtn) {
+    $closeBtn.click(() => this.close());
+    this.$overlay.click((e) => {
+      if (e.target === this.$overlay[0]) this.close();
+    });
+    $(document).on('keydown.videoModal', (e) => {
+      if (e.key === 'Escape') this.close();
+    });
+  },
+
+  playVideo() {
+    if (this.modalPlayer) {
+      this.modalPlayer.play();
+    }
+  },
+
+  pauseVideo() {
+    if (this.modalPlayer) {
+      this.modalPlayer.pause();
+    }
+  },
+
+  addStyles() {
+    $('<style>')
+      .text(
+        `
+          .video-modal-overlay {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100vw;
+              height: 100vh;
+              background: rgba(0, 0, 0, 0.8);
+              z-index: 9998;
+              backdrop-filter: blur(10px);
+          }
+          
+          .video-modal-container {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+          }
+          
+          .video-modal-wrapper {
+              width: 80%;
+              max-width: 1200px;
+              position: relative;
+              border-radius: 12px;
+              overflow: hidden;
+              box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+          }
+          
+          .video-modal-wrapper .hp-hero_content-visual {
+              width: 100% !important;
+              height: 100% !important;
+              object-fit: cover;
+          }
+          
+          .video-modal-wrapper video {
+              width: 100% !important;
+              height: 100% !important;
+              object-fit: cover;
+          }
+          
+          .video-modal-close {
+              position: absolute;
+              top: 20px;
+              right: 20px;
+              width: 40px;
+              height: 40px;
+              background: var(--body1);
+              color: var(--text-1);
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 24px;
+              font-weight: bold;
+              cursor: pointer;
+              z-index: 10000;
+              transition: all 0.2s ease;
+          }
+          
+          .video-modal-close:hover {
+              background: white;
+              transform: scale(1.1);
+          }
+      `
+      )
+      .appendTo('head');
+  },
+};
 // -- Nav
 function initNav() {
   let hamOpen = $('[data-nav-toggle="open"]');
@@ -573,8 +859,7 @@ function animateNav() {
 function initBackHome() {
   let backHome = $('[data-back-to-home]');
   let label = backHome.find('[data-back-label]');
-  label.attr('data-original-test', label.text());
-  let originalText = label.attr('data-original-test');
+  let originalText = label.attr('data-original-text');
 
   backHome.hover(
     function () {
@@ -1152,16 +1437,11 @@ function initWhySwipers() {
   }
   const caseSwiper = new Swiper('.why-hero_cases-slider', {
     slidesPerView: 1,
-    modules: [SwiperGL],
-    effect: 'gl',
-    gl: {
-      // specify required shader effect
-      shader: 'morph-y',
+    effect: 'fade',
+    fadeEffect: {
+      crossfade: true,
     },
     loop: true,
-    fadeEffect: {
-      crossFade: true,
-    },
     pagination: {
       el: '.swiper-nav.cc-cases',
       bulletClass: 'swiper-dot',
@@ -1539,9 +1819,11 @@ function initAdvancedFormValidation() {
 
     function updateState() {
       if ($input.attr('type') === 'radio') {
-        $(`input[name="${$input.attr('name')}"]`).each(function () {
-          $(this).closest('.form-checkbox').removeClass('cc-active');
-        });
+        $(`input[name="${$input.attr('name')}"]`)
+          .not(':checked')
+          .each(function () {
+            $(this).closest('.form-checkbox').removeClass('cc-active');
+          });
       }
 
       if ($input.is(':checked')) {
@@ -1554,6 +1836,486 @@ function initAdvancedFormValidation() {
     updateState();
     $input.on('change', updateState);
   });
+}
+
+// -- Labs Page
+function initLabsGrid() {
+  const config = {
+    cellSize: 0.75,
+    zoomLevel: 1.25,
+    lerpFactor: 0.075,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'transparent',
+    textColor: '#ffffff',
+    hoverColor: 'rgba(255, 255, 255, 0)',
+  };
+
+  // Extract project data from DOM
+  const projects = [];
+
+  $('[data-lab-item]').each(function () {
+    const $item = $(this);
+
+    const project = {
+      title: $item.find('[data-lab-title]').text().trim(),
+      desc: $item.find('[data-lab-desc]').text().trim(),
+      image: $item.find('[data-lab-img]').attr('src'),
+      year: $item.find('[data-lab-date]').text(),
+      href: $item.find('[data-lab-link]').attr('href'),
+    };
+
+    projects.push(project);
+  });
+
+  // Three.js variables
+  let scene, camera, renderer, plane;
+  let isDragging = false,
+    isClick = true,
+    clickStartTime = 0;
+  let previousMouse = { x: 0, y: 0 };
+  let offset = { x: 0, y: 0 },
+    targetOffset = { x: 0, y: 0 };
+  let mousePosition = { x: -1, y: -1 };
+  let zoomLevel = 1.0,
+    targetZoom = 1.0;
+  let textTextures = [];
+
+  // Convert CSS colors to shader format
+  const rgbaToArray = (color) => {
+    if (color === 'transparent') {
+      return [0, 0, 0, 0];
+    }
+
+    if (color.startsWith('#')) {
+      const hex = color.slice(1);
+      const r = parseInt(hex.substr(0, 2), 16) / 255;
+      const g = parseInt(hex.substr(2, 2), 16) / 255;
+      const b = parseInt(hex.substr(4, 2), 16) / 255;
+      return [r, g, b, 1];
+    }
+
+    const match = color.match(/rgba?\(([^)]+)\)/);
+    if (!match) return [0, 0, 0, 1];
+    return match[1]
+      .split(',')
+      .map((v, i) => (i < 3 ? parseFloat(v.trim()) / 255 : parseFloat(v.trim() || 1)));
+  };
+
+  // Get current text color from CSS
+  const getComputedTextColor = () => {
+    const container = document.getElementById('gallery');
+    const computedStyle = getComputedStyle(container);
+    return computedStyle.color || '#ffffff';
+  };
+
+  // Create text texture from project title and year
+  const createTextTexture = (title, year) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2048;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+
+    ctx.clearRect(0, 0, 2048, 512);
+    ctx.font = '60px Arial';
+    ctx.fillStyle = getComputedTextColor();
+    ctx.textBaseline = 'top';
+
+    // Text wrapping function
+    const wrapText = (text, maxWidth) => {
+      const words = text.split(' ');
+      const lines = [];
+      let currentLine = words[0];
+
+      for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const { width } = ctx.measureText(currentLine + ' ' + word);
+        if (width < maxWidth) {
+          currentLine += ' ' + word;
+        } else {
+          lines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      lines.push(currentLine);
+      return lines;
+    };
+
+    // Render title with wrapping
+    const titleLines = wrapText(title, 1800);
+    titleLines.forEach((line, index) => {
+      ctx.fillText(line, 50, 50 + index * 70);
+    });
+
+    // Add year
+    ctx.fillStyle = '#999999';
+    ctx.fillText(year, 50, 50 + titleLines.length * 70 + 20);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    Object.assign(texture, {
+      wrapS: THREE.ClampToEdgeWrapping,
+      wrapT: THREE.ClampToEdgeWrapping,
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      flipY: false,
+      generateMipmaps: false,
+      format: THREE.RGBAFormat,
+    });
+
+    return texture;
+  };
+
+  // Combine textures into single atlas
+  const createTextureAtlas = (textures, isText = false) => {
+    const textureCount = textures.length;
+    const atlasWidth = textureCount;
+    const atlasHeight = 1;
+
+    const textureSize = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = atlasWidth * textureSize;
+    canvas.height = atlasHeight * textureSize;
+    const ctx = canvas.getContext('2d');
+
+    if (isText) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    textures.forEach((texture, index) => {
+      const x = (index % atlasWidth) * textureSize;
+      const y = Math.floor(index / atlasWidth) * textureSize;
+
+      if (isText && texture.source?.data) {
+        ctx.drawImage(texture.source.data, x, y, textureSize, textureSize);
+      } else if (!isText) {
+        if (texture.image?.complete && texture.image.naturalWidth > 0) {
+          ctx.drawImage(texture.image, x, y, textureSize, textureSize);
+        } else {
+          ctx.fillStyle = '#ff0000';
+          ctx.fillRect(x, y, textureSize, textureSize);
+        }
+      }
+    });
+
+    const atlasTexture = new THREE.CanvasTexture(canvas);
+    Object.assign(atlasTexture, {
+      wrapS: THREE.ClampToEdgeWrapping,
+      wrapT: THREE.ClampToEdgeWrapping,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      flipY: false,
+    });
+
+    atlasTexture.needsUpdate = true;
+
+    return {
+      texture: atlasTexture,
+      atlasWidth: atlasWidth,
+      atlasHeight: atlasHeight,
+    };
+  };
+
+  // Load all project images
+  const loadTextures = () => {
+    const textureLoader = new THREE.TextureLoader();
+    const imageTextures = [];
+    let loadedCount = 0;
+
+    return new Promise((resolve) => {
+      projects.forEach((project, index) => {
+        const texture = textureLoader.load(
+          project.image,
+          () => {
+            if (++loadedCount === projects.length) resolve(imageTextures);
+          },
+          undefined,
+          (error) => {
+            if (++loadedCount === projects.length) resolve(imageTextures);
+          }
+        );
+
+        Object.assign(texture, {
+          wrapS: THREE.ClampToEdgeWrapping,
+          wrapT: THREE.ClampToEdgeWrapping,
+          minFilter: THREE.LinearFilter,
+          magFilter: THREE.LinearFilter,
+        });
+
+        imageTextures.push(texture);
+        textTextures.push(createTextTexture(project.title, project.year));
+      });
+    });
+  };
+
+  // Update mouse position for shader
+  const updateMousePosition = (event) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mousePosition.x = event.clientX - rect.left;
+    mousePosition.y = event.clientY - rect.top;
+    plane?.material.uniforms.uMousePos.value.set(mousePosition.x, mousePosition.y);
+  };
+
+  // Check if click is on navigation elements
+  const isClickOnNavigation = (event) => {
+    const { target } = event;
+    return (
+      target.closest('nav') ||
+      target.closest('.navbar') ||
+      target.closest('[data-nav]') ||
+      target.closest('header') ||
+      target.tagName === 'A' ||
+      target.closest('a')
+    );
+  };
+
+  // Start drag interaction
+  const startDrag = (event, x, y) => {
+    if (isClickOnNavigation(event)) return false;
+
+    isDragging = true;
+    isClick = true;
+    clickStartTime = Date.now();
+    document.body.classList.add('dragging');
+    previousMouse.x = x;
+    previousMouse.y = y;
+    setTimeout(() => isDragging && (targetZoom = config.zoomLevel), 150);
+    return true;
+  };
+
+  const onPointerDown = (e) => {
+    if (!startDrag(e, e.clientX, e.clientY)) return;
+  };
+
+  const onTouchStart = (e) => {
+    if (!startDrag(e, e.touches[0].clientX, e.touches[0].clientY)) return;
+    e.preventDefault();
+  };
+
+  // Handle drag movement
+  const handleMove = (currentX, currentY) => {
+    if (!isDragging || currentX === undefined || currentY === undefined) return;
+
+    const deltaX = currentX - previousMouse.x;
+    const deltaY = currentY - previousMouse.y;
+
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+      isClick = false;
+      if (targetZoom === 1.0) targetZoom = config.zoomLevel;
+    }
+
+    targetOffset.x -= deltaX * 0.003;
+    targetOffset.y += deltaY * 0.003;
+    previousMouse.x = currentX;
+    previousMouse.y = currentY;
+  };
+
+  const onPointerMove = (e) => handleMove(e.clientX, e.clientY);
+  const onTouchMove = (e) => {
+    e.preventDefault();
+    handleMove(e.touches[0].clientX, e.touches[0].clientY);
+  };
+
+  // Handle click to navigate to project
+  const onPointerUp = (event) => {
+    if (!isDragging) return;
+
+    isDragging = false;
+    document.body.classList.remove('dragging');
+    targetZoom = 1.0;
+
+    if (isClick && Date.now() - clickStartTime < 200) {
+      const endX = event.clientX || event.changedTouches?.[0]?.clientX;
+      const endY = event.clientY || event.changedTouches?.[0]?.clientY;
+
+      if (endX !== undefined && endY !== undefined && !isClickOnNavigation(event)) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const screenX = ((endX - rect.left) / rect.width) * 2 - 1;
+        const screenY = -(((endY - rect.top) / rect.height) * 2 - 1);
+
+        const radius = Math.sqrt(screenX * screenX + screenY * screenY);
+        const distortion = 1.0 - 0.08 * radius * radius;
+
+        let worldX = screenX * distortion * (rect.width / rect.height) * zoomLevel + offset.x;
+        let worldY = screenY * distortion * zoomLevel + offset.y;
+
+        const cellX = Math.floor((worldX / config.cellSize) * 0.88);
+        const cellY = Math.floor((worldY / config.cellSize) * 0.95);
+        const texIndex = Math.floor((cellX + cellY * 3.0) % projects.length);
+        const actualIndex = texIndex < 0 ? projects.length + texIndex : texIndex;
+
+        if (projects[actualIndex]?.href) {
+          window.location.href = projects[actualIndex].href;
+        }
+      }
+    }
+  };
+
+  // Handle window resize
+  const onWindowResize = () => {
+    const container = document.getElementById('gallery');
+    if (!container) return;
+
+    const { offsetWidth: width, offsetHeight: height } = container;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    plane?.material.uniforms.uResolution.value.set(width, height);
+  };
+
+  // Watch for theme changes and update text colors
+  const setupThemeObserver = () => {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (
+          mutation.type === 'attributes' &&
+          (mutation.attributeName === 'data-theme' || mutation.attributeName === 'class')
+        ) {
+          setTimeout(() => {
+            updateTextColors();
+          }, 400);
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'class'],
+    });
+
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'class'],
+    });
+  };
+
+  // Update text textures when theme changes
+  const updateTextColors = () => {
+    if (!plane?.material?.uniforms?.uTextAtlas) return;
+
+    const newTextTextures = projects.map((p) => createTextTexture(p.title, p.year));
+    const textResult = createTextureAtlas(newTextTextures, true);
+
+    // Dispose old texture properly
+    const old = plane.material.uniforms.uTextAtlas.value;
+    if (old && old.dispose) old.dispose();
+
+    // Apply new texture
+    const tex = textResult.texture;
+    tex.needsUpdate = true;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    plane.material.uniforms.uTextAtlas.value = tex;
+
+    // Ensure material and render state are refreshed
+    plane.material.needsUpdate = true;
+    renderer.resetState();
+    renderer.compile(scene, camera);
+    renderer.render(scene, camera);
+  };
+
+  // Set up all event listeners
+  const setupEventListeners = () => {
+    const container = document.getElementById('gallery');
+
+    container.addEventListener('mousedown', onPointerDown);
+    container.addEventListener('mousemove', onPointerMove);
+    container.addEventListener('mouseup', onPointerUp);
+    container.addEventListener('mouseleave', onPointerUp);
+
+    const passiveOpts = { passive: false };
+    container.addEventListener('touchstart', onTouchStart, passiveOpts);
+    container.addEventListener('touchmove', onTouchMove, passiveOpts);
+    container.addEventListener('touchend', onPointerUp, passiveOpts);
+
+    window.addEventListener('resize', onWindowResize);
+    container.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    renderer.domElement.addEventListener('mousemove', updateMousePosition);
+    renderer.domElement.addEventListener('mouseleave', () => {
+      mousePosition.x = mousePosition.y = -1;
+      plane?.material.uniforms.uMousePos.value.set(-1, -1);
+    });
+  };
+
+  // Animation loop
+  const animate = () => {
+    requestAnimationFrame(animate);
+
+    offset.x += (targetOffset.x - offset.x) * config.lerpFactor;
+    offset.y += (targetOffset.y - offset.y) * config.lerpFactor;
+    zoomLevel += (targetZoom - zoomLevel) * config.lerpFactor;
+
+    if (plane?.material.uniforms) {
+      plane.material.uniforms.uOffset.value.set(offset.x, offset.y);
+      plane.material.uniforms.uZoom.value = zoomLevel;
+    }
+
+    renderer.render(scene, camera);
+  };
+
+  // Initialize Three.js scene
+  const init = async () => {
+    const container = document.getElementById('gallery');
+    if (!container) return;
+
+    // Set up Three.js
+    scene = new THREE.Scene();
+    camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+    camera.position.z = 1;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(container.offsetWidth, container.offsetHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+
+    // Make canvas transparent
+    renderer.setClearColor(new THREE.Color(0, 0, 0), 0);
+    container.appendChild(renderer.domElement);
+
+    // Load textures and create atlases
+    const imageTextures = await loadTextures();
+    const imageResult = createTextureAtlas(imageTextures, false);
+    const textResult = createTextureAtlas(textTextures, true);
+
+    // Create shader uniforms
+    const uniforms = {
+      uOffset: { value: new THREE.Vector2(0, 0) },
+      uResolution: { value: new THREE.Vector2(container.offsetWidth, container.offsetHeight) },
+      uBorderColor: { value: new THREE.Vector4(...rgbaToArray(config.borderColor)) },
+      uHoverColor: { value: new THREE.Vector4(...rgbaToArray(config.hoverColor)) },
+      uBackgroundColor: { value: new THREE.Vector4(...rgbaToArray(config.backgroundColor)) },
+      uMousePos: { value: new THREE.Vector2(-1, -1) },
+      uZoom: { value: 1.0 },
+      uCellSize: { value: config.cellSize },
+      uTextureCount: { value: projects.length },
+      uAtlasSize: { value: imageResult.atlasSize },
+      uAtlasWidth: { value: imageResult.atlasWidth },
+      uAtlasHeight: { value: imageResult.atlasHeight },
+      uImageAtlas: { value: imageResult.texture },
+      uTextAtlas: { value: textResult.texture },
+    };
+
+    // Create shader material and mesh
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms,
+    });
+
+    material.needsUpdate = true;
+    renderer.compile(scene, camera);
+
+    plane = new THREE.Mesh(geometry, material);
+    scene.add(plane);
+
+    // Start everything
+    setupEventListeners();
+    setupThemeObserver();
+    animate();
+  };
+
+  init();
 }
 
 // -- Anim Functions
@@ -1853,6 +2615,7 @@ function initSiteFunctionality(data) {
     initButtonCharacterStagger();
   });
   window.initDarkModeToggle();
+  VideoModal.init();
 }
 
 // Pages
@@ -1880,6 +2643,9 @@ function initWhy() {
 }
 function initContact() {
   initAdvancedFormValidation();
+}
+function initLabs() {
+  initLabsGrid();
 }
 
 // Modular Barba.js implementation with work item transition
@@ -1912,6 +2678,8 @@ function runInitFunctions(data) {
     initWhy();
   } else if (namespace === 'contact') {
     initContact();
+  } else if (namespace === 'labs') {
+    initLabs();
   }
 
   // Add transition styles
@@ -1932,9 +2700,10 @@ function initBarba() {
     timeout: 15000,
     prefetchIgnore: true,
     sync: true,
+    debug: true,
 
     // Define transitions
-    transitions: createDefaultTransition(),
+    transitions: [createWorkItemTransition(), createDefaultTransition()],
   });
 
   function createDefaultTransition() {
@@ -2040,6 +2809,7 @@ function initBarba() {
 
       async enter(data) {
         await transitionPages(data);
+        resetWebflow(data);
       },
 
       async after(data) {
@@ -2055,32 +2825,193 @@ function initBarba() {
   function addTransitionStyles() {
     const transitionStyles = document.createElement('style');
     transitionStyles.innerHTML = `
-      .barba-container {
-        position: relative;
-      }
-      
-      html.is-animating .barba-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-      }
+    .barba-container {
+      position: relative;
+    }
+    
+    html.is-animating .barba-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
 
-      .work-item-clone {
-        position: fixed;
-        z-index: 9999;
-        pointer-events: none;
-        transition: none;
-        will-change: transform, width, height, top, left;
-        transform-origin: center center;
-        box-shadow: 0 5px 25px rgba(0, 0, 0, 0.1);
-      }
-    `;
+    .work-item-clone {
+      position: fixed;
+      z-index: 9999;
+      pointer-events: none;
+      transition: none;
+      will-change: transform, width, height, top, left;
+      transform-origin: center center;
+      box-shadow: 0 5px 25px rgba(0, 0, 0, 0.1);
+    }
+  `;
     document.head.appendChild(transitionStyles);
   }
 
   function createWorkItemTransition() {
+    function cloneWorkItem(trigger) {
+      const clickedItem = $(trigger).closest('.work_slider-item').find('.work_slider-item_visual');
+
+      if (clickedItem.length) {
+        // Store position and size data
+        const rect = clickedItem[0].getBoundingClientRect();
+        const styles = window.getComputedStyle(clickedItem[0]);
+
+        // Store data for later use
+        clickedItemData = {
+          rect,
+          backgroundColor: styles.backgroundColor,
+          borderRadius: styles.borderRadius || '0px',
+        };
+
+        // Create clone element
+        clonedElement = document.createElement('div');
+        clonedElement.className = 'work-item-clone';
+
+        // Find the image element in the clicked item
+        const imgElement = clickedItem.find('img');
+        const imgSrc = imgElement.attr('src') || '';
+
+        // Style the cloned element
+        $(clonedElement).css({
+          position: 'fixed',
+          top: rect.top + 'px',
+          left: rect.left + 'px',
+          width: rect.width + 'px',
+          height: rect.height + 'px',
+          backgroundColor: clickedItemData.backgroundColor,
+          borderRadius: clickedItemData.borderRadius,
+          zIndex: 9999,
+        });
+
+        // Create and append image container div inside the clone
+        if (imgSrc) {
+          const imgContainer = $('<div class="clone-img-container"></div>');
+          const imgClone = $('<img>').attr('src', imgSrc);
+
+          imgContainer.css({
+            width: '100%',
+            height: '100%',
+            overflow: 'hidden',
+          });
+
+          imgClone.css({
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center',
+          });
+
+          imgContainer.append(imgClone);
+          $(clonedElement).append(imgContainer);
+        }
+
+        // Add to body
+        document.body.appendChild(clonedElement);
+      }
+    }
+    function createLeaveAnimation(container) {
+      const tl = gsap.timeline();
+
+      // Fade out container
+      tl.to(container, {
+        opacity: 0,
+        duration: 0.5,
+        onComplete: () => {
+          pauseScroll(true);
+        },
+      });
+
+      // If we have a cloned element, animate it to center
+      if (clonedElement && clickedItemData) {
+        // Calculate center position
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const targetWidth = Math.min(windowWidth * 0.8, 800);
+        const targetHeight =
+          targetWidth * (clickedItemData.rect.height / clickedItemData.rect.width);
+        const targetLeft = (windowWidth - targetWidth) / 2;
+        const targetTop = (windowHeight - targetHeight) / 2;
+
+        // Animate to center
+        tl.to(
+          clonedElement,
+          {
+            top: targetTop,
+            left: targetLeft,
+            width: targetWidth,
+            height: targetHeight,
+            duration: 0.8,
+            ease: 'power2.inOut',
+            delay: 0.1,
+          },
+          '-=0.3'
+        );
+      }
+
+      return tl;
+    }
+
+    function animateCloneToTarget(container) {
+      return new Promise((resolve) => {
+        const targetElement = $(container).find('.work-d_hero-list-img-mask').first()[0];
+
+        if (clonedElement && targetElement) {
+          setTimeout(() => {
+            const state = Flip.getState(clonedElement);
+
+            const targetRect = targetElement.getBoundingClientRect();
+            $(clonedElement).css({
+              top: targetRect.top + 'px',
+              left: targetRect.left + 'px',
+              width: targetRect.width + 'px',
+              height: targetRect.height + 'px',
+            });
+
+            const imgElement = $(clonedElement).find('img');
+            console.log(imgElement);
+
+            const tl = gsap.timeline({
+              onComplete: () => {
+                gsap.to(container, {
+                  opacity: 1,
+                  duration: 0.5,
+                  onComplete: () => {
+                    if (clonedElement) {
+                      clonedElement.remove();
+                      clonedElement = null;
+                    }
+                    resolve();
+                  },
+                });
+              },
+            });
+
+            tl.add(
+              Flip.from(state, {
+                duration: 0.8,
+                ease: 'power2.inOut',
+              })
+            );
+
+            // Start at the same time as the FLIP animation
+          }, 100);
+        } else {
+          gsap.to(container, {
+            opacity: 1,
+            duration: 0.5,
+            onComplete: resolve,
+          });
+
+          if (clonedElement) {
+            clonedElement.remove();
+            clonedElement = null;
+          }
+        }
+      });
+    }
     return {
       name: 'home-to-work',
       from: { namespace: 'home' },
@@ -2098,7 +3029,6 @@ function initBarba() {
 
       // Before leaving page
       beforeLeave(data) {
-        pauseScroll(true);
         cloneWorkItem(data.trigger);
       },
 
@@ -2115,172 +3045,16 @@ function initBarba() {
         });
       },
 
+      afterEnter(data) {
+        pauseScroll(false);
+        animateCloneToTarget(data.next.container);
+      },
+
       // After transition
       after(data) {
-        animateCloneToTarget(data.next.container);
         runInitFunctions(data);
-        pauseScroll(false);
         document.documentElement.classList.remove('is-animating');
       },
     };
-  }
-
-  function cloneWorkItem(trigger) {
-    const clickedItem = $(trigger).closest('.work_slider-item');
-
-    if (clickedItem.length) {
-      // Store position and size data
-      const rect = clickedItem[0].getBoundingClientRect();
-      const styles = window.getComputedStyle(clickedItem[0]);
-
-      // Store data for later use
-      clickedItemData = {
-        rect,
-        backgroundColor: styles.backgroundColor,
-        borderRadius: styles.borderRadius || '0px',
-      };
-
-      // Create clone element
-      clonedElement = document.createElement('div');
-      clonedElement.className = 'work-item-clone';
-
-      // Find the image element in the clicked item
-      const imgElement = clickedItem.find('img');
-      const imgSrc = imgElement.attr('src') || '';
-
-      // Style the cloned element
-      $(clonedElement).css({
-        position: 'fixed',
-        top: rect.top + 'px',
-        left: rect.left + 'px',
-        width: rect.width + 'px',
-        height: rect.height + 'px',
-        backgroundColor: clickedItemData.backgroundColor,
-        borderRadius: clickedItemData.borderRadius,
-        zIndex: 9999,
-      });
-
-      // Create and append image container div inside the clone
-      if (imgSrc) {
-        const imgContainer = $('<div class="clone-img-container"></div>');
-        const imgClone = $('<img>').attr('src', imgSrc);
-
-        imgContainer.css({
-          width: '100%',
-          height: '100%',
-          overflow: 'hidden',
-        });
-
-        imgClone.css({
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: 'center',
-        });
-
-        imgContainer.append(imgClone);
-        $(clonedElement).append(imgContainer);
-      }
-
-      // Add to body
-      document.body.appendChild(clonedElement);
-    }
-  }
-
-  function createLeaveAnimation(container) {
-    const tl = gsap.timeline();
-
-    // Fade out container
-    tl.to(container, {
-      opacity: 0,
-      duration: 0.5,
-    });
-
-    // If we have a cloned element, animate it to center
-    if (clonedElement && clickedItemData) {
-      // Calculate center position
-      const windowWidth = window.innerWidth;
-      const windowHeight = window.innerHeight;
-      const targetWidth = Math.min(windowWidth * 0.8, 800);
-      const targetHeight = targetWidth * (clickedItemData.rect.height / clickedItemData.rect.width);
-      const targetLeft = (windowWidth - targetWidth) / 2;
-      const targetTop = (windowHeight - targetHeight) / 2;
-
-      // Animate to center
-      tl.to(
-        clonedElement,
-        {
-          top: targetTop,
-          left: targetLeft,
-          width: targetWidth,
-          height: targetHeight,
-          duration: 0.8,
-          ease: 'power2.inOut',
-          delay: 0.1,
-        },
-        '-=0.3'
-      );
-    }
-
-    return tl;
-  }
-
-  function animateCloneToTarget(container) {
-    return new Promise((resolve) => {
-      const targetElement = $(container).find('.work-d_hero-list-item').first()[0];
-
-      if (clonedElement && targetElement) {
-        setTimeout(() => {
-          const state = Flip.getState(clonedElement);
-
-          const targetRect = targetElement.getBoundingClientRect();
-          $(clonedElement).css({
-            top: targetRect.top + 'px',
-            left: targetRect.left + 'px',
-            width: targetRect.width + 'px',
-            height: targetRect.height + 'px',
-          });
-
-          const imgElement = $(clonedElement).find('img');
-          console.log(imgElement);
-
-          const tl = gsap.timeline({
-            onComplete: () => {
-              gsap.to(container, {
-                opacity: 1,
-                duration: 0.5,
-                onComplete: () => {
-                  if (clonedElement) {
-                    clonedElement.remove();
-                    clonedElement = null;
-                  }
-                  resolve();
-                },
-              });
-            },
-          });
-
-          tl.add(
-            Flip.from(state, {
-              duration: 0.8,
-              ease: 'power2.inOut',
-            })
-          );
-
-          // Start at the same time as the FLIP animation
-        }, 100);
-      } else {
-        gsap.to(container, {
-          opacity: 1,
-          duration: 0.5,
-          onComplete: resolve,
-        });
-
-        if (clonedElement) {
-          clonedElement.remove();
-          clonedElement = null;
-        }
-      }
-    });
   }
 }
