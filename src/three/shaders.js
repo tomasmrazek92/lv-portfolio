@@ -20,6 +20,8 @@ export const fragmentShader = `
   uniform float uAtlasHeight;
   uniform sampler2D uImageAtlas;
   uniform sampler2D uTextAtlas;
+  uniform vec2 uHoveredCell;
+  uniform float uHoverIntensity;
   varying vec2 vUv;
   
   void main() {
@@ -43,25 +45,7 @@ export const fragmentShader = `
     vec2 cellId = floor(cellPos);
     vec2 cellUV = fract(cellPos);
     
-    vec2 mouseScreenUV = (uMousePos / uResolution) * 2.0 - 1.0;
-    mouseScreenUV.y = -mouseScreenUV.y;
-    
-    float mouseRadius = length(mouseScreenUV);
-    float mouseDistortion = 1.0 - 0.08 * mouseRadius * mouseRadius;
-    vec2 mouseDistortedUV = mouseScreenUV * mouseDistortion;
-    vec2 mouseWorldCoord = mouseDistortedUV * aspectRatio;
-    
-    mouseWorldCoord *= uZoom;
-    mouseWorldCoord += uOffset;
-    
-    vec2 mouseCellPos = mouseWorldCoord / uCellSize;
-    vec2 mouseCellId = floor(mouseCellPos);
-    
-    vec2 cellCenter = cellId + 0.5;
-    vec2 mouseCellCenter = mouseCellId + 0.5;
-    float cellDistance = length(cellCenter - mouseCellCenter);
-    float hoverIntensity = 1.0 - smoothstep(0.4, 0.7, cellDistance);
-    bool isHovered = hoverIntensity > 0.0 && uMousePos.x >= 0.0;
+    bool isHovered = (cellId.x == uHoveredCell.x && cellId.y == uHoveredCell.y && uHoverIntensity > 0.01);
     
     float cellIndex = cellId.x + cellId.y * 3.0;
     float texIndex = mod(cellIndex, uTextureCount);
@@ -72,13 +56,21 @@ export const fragmentShader = `
     float imageHeight = 0.68;
     float imageMargin = 0.03;
     
-    bool inImageArea = cellUV.x >= imageMargin && cellUV.x <= (1.0 - imageMargin) && 
-                       cellUV.y >= imageMargin && cellUV.y <= imageHeight;
+    float actualImageMargin = imageMargin;
+    float actualImageHeight = imageHeight;
+    if (isHovered) {
+      float scaleReduction = uHoverIntensity * 0.02;
+      actualImageMargin = imageMargin + scaleReduction;
+      actualImageHeight = imageHeight - scaleReduction;
+    }
+    
+    bool inImageArea = cellUV.x >= actualImageMargin && cellUV.x <= (1.0 - actualImageMargin) && 
+                       cellUV.y >= actualImageMargin && cellUV.y <= actualImageHeight;
     
     if (inImageArea) {
       vec2 imageUV = vec2(
-        (cellUV.x - imageMargin) / (1.0 - 2.0 * imageMargin),
-        (cellUV.y - imageMargin) / (imageHeight - imageMargin)
+        (cellUV.x - actualImageMargin) / (1.0 - 2.0 * actualImageMargin),
+        (cellUV.y - actualImageMargin) / (actualImageHeight - actualImageMargin)
       );
       
       float atlasX = mod(texIndex, uAtlasWidth);
@@ -91,11 +83,11 @@ export const fragmentShader = `
       alpha = 1.0;
       
       if (isHovered) {
-        color = mix(color, uHoverColor.rgb, hoverIntensity * uHoverColor.a * 0.3);
+        color = mix(color, uHoverColor.rgb, uHoverIntensity * uHoverColor.a * 0.3);
       }
     }
     
-    float textY = imageHeight + 0.04;
+    float textY = 0.68 + 0.04;
     float textHeight = 1.0 - textY - imageMargin;
     
     bool inTextArea = cellUV.x >= imageMargin && cellUV.x <= (1.0 - imageMargin) && 
@@ -119,7 +111,7 @@ export const fragmentShader = `
         alpha = textColor.a;
         
         if (isHovered) {
-          color = mix(color, uHoverColor.rgb, hoverIntensity * uHoverColor.a * 0.2);
+          color = mix(color, uHoverColor.rgb, uHoverIntensity * uHoverColor.a * 0.2);
         }
       }
     }

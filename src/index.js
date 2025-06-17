@@ -761,6 +761,7 @@ const VideoModal = {
       .appendTo('head');
   },
 };
+
 // -- Nav
 function initNav() {
   let hamOpen = $('[data-nav-toggle="open"]');
@@ -871,11 +872,22 @@ function initBackHome() {
   );
 }
 
+function setFrameHeight() {
+  var windowHeight = $(window).height();
+  $('.site-frame-container').css('height', windowHeight + 'px');
+}
+
+setFrameHeight();
+
+$(window).resize(function () {
+  setFrameHeight();
+});
+
 // -- Homepage
 function animateHomepageHero() {
   $('.hp-hero_content-block').each(function () {
     let tl = gsap.timeline();
-    initMaskTextReveal($(this).find('p').eq(0));
+    initMaskTextReveal($(this).find('.hp-hero_content-label').eq(0));
     tl.fromTo(
       $(this).find('li'),
       { opacity: 0, xPercent: -5 },
@@ -1840,6 +1852,10 @@ function initAdvancedFormValidation() {
 
 // -- Labs Page
 function initLabsGrid() {
+  console.log('Shaders available:', {
+    vertex: typeof vertexShader,
+    fragment: typeof fragmentShader,
+  });
   const config = {
     cellSize: 0.75,
     zoomLevel: 1.25,
@@ -1850,7 +1866,6 @@ function initLabsGrid() {
     hoverColor: 'rgba(255, 255, 255, 0)',
   };
 
-  // Extract project data from DOM
   const projects = [];
 
   $('[data-lab-item]').each(function () {
@@ -1867,7 +1882,6 @@ function initLabsGrid() {
     projects.push(project);
   });
 
-  // Three.js variables
   let scene, camera, renderer, plane;
   let isDragging = false,
     isClick = true,
@@ -1880,7 +1894,12 @@ function initLabsGrid() {
     targetZoom = 1.0;
   let textTextures = [];
 
-  // Convert CSS colors to shader format
+  let currentHoveredCell = { x: -999, y: -999 };
+  let targetHoveredCell = { x: -999, y: -999 };
+  let hoverAnimationValue = 0;
+  let targetHoverValue = 0;
+  const hoverSpeed = 0.15;
+
   const rgbaToArray = (color) => {
     if (color === 'transparent') {
       return [0, 0, 0, 0];
@@ -1901,14 +1920,12 @@ function initLabsGrid() {
       .map((v, i) => (i < 3 ? parseFloat(v.trim()) / 255 : parseFloat(v.trim() || 1)));
   };
 
-  // Get current text color from CSS
   const getComputedTextColor = () => {
     const container = document.getElementById('gallery');
     const computedStyle = getComputedStyle(container);
     return computedStyle.color || '#ffffff';
   };
 
-  // Create text texture from project title and year
   const createTextTexture = (title, year) => {
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
@@ -1920,7 +1937,6 @@ function initLabsGrid() {
     ctx.fillStyle = getComputedTextColor();
     ctx.textBaseline = 'top';
 
-    // Text wrapping function
     const wrapText = (text, maxWidth) => {
       const words = text.split(' ');
       const lines = [];
@@ -1940,13 +1956,11 @@ function initLabsGrid() {
       return lines;
     };
 
-    // Render title with wrapping
     const titleLines = wrapText(title, 1800);
     titleLines.forEach((line, index) => {
       ctx.fillText(line, 50, 50 + index * 70);
     });
 
-    // Add year
     ctx.fillStyle = '#999999';
     ctx.fillText(year, 50, 50 + titleLines.length * 70 + 20);
 
@@ -1964,7 +1978,6 @@ function initLabsGrid() {
     return texture;
   };
 
-  // Combine textures into single atlas
   const createTextureAtlas = (textures, isText = false) => {
     const textureCount = textures.length;
     const atlasWidth = textureCount;
@@ -2017,7 +2030,6 @@ function initLabsGrid() {
     };
   };
 
-  // Load all project images
   const loadTextures = () => {
     const textureLoader = new THREE.TextureLoader();
     const imageTextures = [];
@@ -2049,15 +2061,50 @@ function initLabsGrid() {
     });
   };
 
-  // Update mouse position for shader
+  const updateHoveredCell = () => {
+    if (!renderer || mousePosition.x < 0 || mousePosition.y < 0) {
+      targetHoveredCell = { x: -999, y: -999 };
+      return;
+    }
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    const screenX = (mousePosition.x / rect.width) * 2 - 1;
+    const screenY = -((mousePosition.y / rect.height) * 2 - 1);
+
+    const radius = Math.sqrt(screenX * screenX + screenY * screenY);
+    const distortion = 1.0 - 0.08 * radius * radius;
+    const distortedX = screenX * distortion;
+    const distortedY = screenY * distortion;
+
+    const aspectRatio = rect.width / rect.height;
+    let worldX = distortedX * aspectRatio * zoomLevel + offset.x;
+    let worldY = distortedY * zoomLevel + offset.y;
+
+    const cellPosX = (worldX / config.cellSize) * 0.95;
+    const cellPosY = (worldY / config.cellSize) * 0.95;
+
+    const cellX = Math.floor(cellPosX);
+    const cellY = Math.floor(cellPosY);
+
+    targetHoveredCell = { x: cellX, y: cellY };
+  };
+
   const updateMousePosition = (event) => {
     const rect = renderer.domElement.getBoundingClientRect();
     mousePosition.x = event.clientX - rect.left;
     mousePosition.y = event.clientY - rect.top;
-    plane?.material.uniforms.uMousePos.value.set(mousePosition.x, mousePosition.y);
+
+    updateHoveredCell();
+
+    if (plane?.material.uniforms) {
+      plane.material.uniforms.uMousePos.value.set(mousePosition.x, mousePosition.y);
+    }
   };
 
-  // Check if click is on navigation elements
+  const lerp = (start, end, factor) => {
+    return start + (end - start) * factor;
+  };
+
   const isClickOnNavigation = (event) => {
     const { target } = event;
     return (
@@ -2070,7 +2117,6 @@ function initLabsGrid() {
     );
   };
 
-  // Start drag interaction
   const startDrag = (event, x, y) => {
     if (isClickOnNavigation(event)) return false;
 
@@ -2093,7 +2139,6 @@ function initLabsGrid() {
     e.preventDefault();
   };
 
-  // Handle drag movement
   const handleMove = (currentX, currentY) => {
     if (!isDragging || currentX === undefined || currentY === undefined) return;
 
@@ -2117,7 +2162,6 @@ function initLabsGrid() {
     handleMove(e.touches[0].clientX, e.touches[0].clientY);
   };
 
-  // Handle click to navigate to project
   const onPointerUp = (event) => {
     if (!isDragging) return;
 
@@ -2146,13 +2190,16 @@ function initLabsGrid() {
         const actualIndex = texIndex < 0 ? projects.length + texIndex : texIndex;
 
         if (projects[actualIndex]?.href) {
-          window.location.href = projects[actualIndex].href;
+          if (typeof barba !== 'undefined' && barba.go) {
+            barba.go(projects[actualIndex].href);
+          } else {
+            window.location.href = projects[actualIndex].href;
+          }
         }
       }
     }
   };
 
-  // Handle window resize
   const onWindowResize = () => {
     const container = document.getElementById('gallery');
     if (!container) return;
@@ -2164,7 +2211,6 @@ function initLabsGrid() {
     plane?.material.uniforms.uResolution.value.set(width, height);
   };
 
-  // Watch for theme changes and update text colors
   const setupThemeObserver = () => {
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
@@ -2190,31 +2236,26 @@ function initLabsGrid() {
     });
   };
 
-  // Update text textures when theme changes
   const updateTextColors = () => {
     if (!plane?.material?.uniforms?.uTextAtlas) return;
 
     const newTextTextures = projects.map((p) => createTextTexture(p.title, p.year));
     const textResult = createTextureAtlas(newTextTextures, true);
 
-    // Dispose old texture properly
     const old = plane.material.uniforms.uTextAtlas.value;
     if (old && old.dispose) old.dispose();
 
-    // Apply new texture
     const tex = textResult.texture;
     tex.needsUpdate = true;
     tex.colorSpace = THREE.SRGBColorSpace;
     plane.material.uniforms.uTextAtlas.value = tex;
 
-    // Ensure material and render state are refreshed
     plane.material.needsUpdate = true;
     renderer.resetState();
     renderer.compile(scene, camera);
     renderer.render(scene, camera);
   };
 
-  // Set up all event listeners
   const setupEventListeners = () => {
     const container = document.getElementById('gallery');
 
@@ -2234,11 +2275,14 @@ function initLabsGrid() {
     renderer.domElement.addEventListener('mousemove', updateMousePosition);
     renderer.domElement.addEventListener('mouseleave', () => {
       mousePosition.x = mousePosition.y = -1;
-      plane?.material.uniforms.uMousePos.value.set(-1, -1);
+      targetHoveredCell = { x: -999, y: -999 };
+      targetHoverValue = 0;
+      if (plane?.material.uniforms) {
+        plane.material.uniforms.uMousePos.value.set(-1, -1);
+      }
     });
   };
 
-  // Animation loop
   const animate = () => {
     requestAnimationFrame(animate);
 
@@ -2246,38 +2290,94 @@ function initLabsGrid() {
     offset.y += (targetOffset.y - offset.y) * config.lerpFactor;
     zoomLevel += (targetZoom - zoomLevel) * config.lerpFactor;
 
+    const cellChanged =
+      currentHoveredCell.x !== targetHoveredCell.x || currentHoveredCell.y !== targetHoveredCell.y;
+
+    if (cellChanged) {
+      if (hoverAnimationValue > 0.01) {
+        hoverAnimationValue = lerp(hoverAnimationValue, 0, hoverSpeed * 1.5);
+      } else {
+        currentHoveredCell.x = targetHoveredCell.x;
+        currentHoveredCell.y = targetHoveredCell.y;
+        if (targetHoveredCell.x !== -999) {
+          targetHoverValue = 1;
+        }
+      }
+    } else {
+      targetHoverValue = targetHoveredCell.x === -999 ? 0 : 1;
+      hoverAnimationValue = lerp(hoverAnimationValue, targetHoverValue, hoverSpeed);
+    }
+
     if (plane?.material.uniforms) {
       plane.material.uniforms.uOffset.value.set(offset.x, offset.y);
       plane.material.uniforms.uZoom.value = zoomLevel;
+      plane.material.uniforms.uHoveredCell.value.set(currentHoveredCell.x, currentHoveredCell.y);
+      plane.material.uniforms.uHoverIntensity.value = hoverAnimationValue;
     }
 
     renderer.render(scene, camera);
   };
 
-  // Initialize Three.js scene
   const init = async () => {
-    const container = document.getElementById('gallery');
-    if (!container) return;
+    console.log('1. Init started');
 
-    // Set up Three.js
+    const container = document.getElementById('gallery');
+    if (!container) {
+      console.log('ERROR: Gallery container not found!');
+      return;
+    }
+    console.log(
+      '2. Container found:',
+      container,
+      'Size:',
+      container.offsetWidth,
+      'x',
+      container.offsetHeight
+    );
+
+    const existingCanvas = container.querySelector('canvas');
+    if (existingCanvas) {
+      console.log('3. Removing existing canvas');
+      existingCanvas.remove();
+    }
+
+    console.log('4. Projects count:', projects.length);
+    if (projects.length === 0) {
+      console.log('ERROR: No projects found');
+      return;
+    }
+
     scene = new THREE.Scene();
     camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
+    console.log('5. Scene and camera created');
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(container.offsetWidth, container.offsetHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    console.log('6. Renderer created');
 
-    // Make canvas transparent
     renderer.setClearColor(new THREE.Color(0, 0, 0), 0);
     container.appendChild(renderer.domElement);
+    console.log('7. Canvas appended to container');
+    console.log('7a. Canvas element:', renderer.domElement, $('canvas'));
+    console.log('7b. Canvas size:', renderer.domElement.width, 'x', renderer.domElement.height);
+    console.log('7c. Canvas style:', renderer.domElement.style.cssText);
+    console.log('7d. Container children count:', container.children.length);
 
-    // Load textures and create atlases
+    console.log('8. Loading textures...');
     const imageTextures = await loadTextures();
+    console.log('9. Textures loaded:', imageTextures.length);
+
     const imageResult = createTextureAtlas(imageTextures, false);
     const textResult = createTextureAtlas(textTextures, true);
+    console.log(
+      '10. Atlases created - Image:',
+      imageResult.atlasWidth,
+      'Text:',
+      textResult.atlasWidth
+    );
 
-    // Create shader uniforms
     const uniforms = {
       uOffset: { value: new THREE.Vector2(0, 0) },
       uResolution: { value: new THREE.Vector2(container.offsetWidth, container.offsetHeight) },
@@ -2293,26 +2393,67 @@ function initLabsGrid() {
       uAtlasHeight: { value: imageResult.atlasHeight },
       uImageAtlas: { value: imageResult.texture },
       uTextAtlas: { value: textResult.texture },
+      uHoveredCell: { value: new THREE.Vector2(-999, -999) },
+      uHoverIntensity: { value: 0.0 },
     };
+    console.log('11. Uniforms created');
 
-    // Create shader material and mesh
     const geometry = new THREE.PlaneGeometry(2, 2);
+    console.log('12. Geometry created');
+
+    console.log(
+      '13. Shader check - Vertex:',
+      typeof vertexShader,
+      'Fragment:',
+      typeof fragmentShader
+    );
+
     const material = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
       uniforms,
     });
+    console.log('14. Material created');
 
     material.needsUpdate = true;
     renderer.compile(scene, camera);
+    console.log('15. Scene compiled');
 
     plane = new THREE.Mesh(geometry, material);
     scene.add(plane);
+    console.log('16. Plane added to scene');
 
-    // Start everything
     setupEventListeners();
+    console.log('17. Event listeners setup');
+
     setupThemeObserver();
+    console.log('18. Theme observer setup');
+
     animate();
+    console.log('19. Animation started - Setup complete!');
+
+    console.log('20. Canvas element:', $('canvas'));
+
+    setTimeout(() => {
+      console.log('20. Post-render check:');
+      console.log('20a. Canvas in DOM:', document.contains(renderer.domElement));
+      console.log(
+        '20b. Canvas visible:',
+        renderer.domElement.offsetWidth > 0 && renderer.domElement.offsetHeight > 0
+      );
+      setTimeout(() => {
+        console.log('20e. Renderer info:', renderer.info.render, $('canvas'));
+
+        // Schedule multiple checks to see when it disappears
+        setTimeout(() => console.log('Check 1ms later:', $('canvas').length), 1);
+        setTimeout(() => console.log('Check 5ms later:', $('canvas').length), 5);
+        setTimeout(() => console.log('Check 10ms later:', $('canvas').length), 10);
+        setTimeout(() => console.log('Check 50ms later:', $('canvas').length), 50);
+        setTimeout(() => console.log('Check 100ms later:', $('canvas').length), 1000);
+      }, 100);
+      console.log('20d. Container computed style:', getComputedStyle(container).display);
+      console.log('20e. Renderer info:', renderer.info.render, $('canvas'));
+    }, 100);
   };
 
   init();
@@ -2616,6 +2757,7 @@ function initSiteFunctionality(data) {
   });
   window.initDarkModeToggle();
   VideoModal.init();
+  setFrameHeight();
 }
 
 // Pages
@@ -2645,6 +2787,12 @@ function initContact() {
   initAdvancedFormValidation();
 }
 function initLabs() {
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+      console.log('Page restored from bfcache - reloading');
+      window.location.reload();
+    }
+  });
   initLabsGrid();
 }
 
@@ -2679,6 +2827,7 @@ function runInitFunctions(data) {
   } else if (namespace === 'contact') {
     initContact();
   } else if (namespace === 'labs') {
+    console.log('labs');
     initLabs();
   }
 
@@ -2817,6 +2966,10 @@ function initBarba() {
         pauseScroll(false);
         document.documentElement.classList.remove('is-animating');
         handleAnchorScroll();
+        if (data.next.namespace === 'labs') {
+          console.log('labs after');
+          initLabs();
+        }
       },
     };
   }
