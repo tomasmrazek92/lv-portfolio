@@ -81,56 +81,62 @@ function initPageGap() {
     // Add CSS for our frames
     const style = document.createElement('style');
     style.innerHTML = `
-    .site-frame-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 9999;
-    }
-    
-    .site-frame {
-      position: absolute;
-      background-color: var(--body-2);
-      transition: transform 0.3s ease;
-    }
-    
-    .site-frame-top, .site-frame-bottom {
-      left: 0;
-      width: 100%;
-      height: 5px;
-      transform: scaleY(var(--gap-size));
-    }
-    
-    .site-frame-top {
-      top: 0;
-      transform-origin: top center;
-    }
-    
-    .site-frame-bottom {
-      bottom: 0;
-      transform-origin: bottom center;
-    }
-    
-    .site-frame-left, .site-frame-right {
-      top: 0;
-      height: 100%;
-      width: 5px;
-      transform: scaleX(var(--gap-size));
-    }
-    
-    .site-frame-left {
-      left: 0;
-      transform-origin: left center;
-    }
-    
-    .site-frame-right {
-      right: 0;
-      transform-origin: right center;
-    }
-  `;
+  .site-frame-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  
+  .site-frame {
+    position: absolute;
+    background-color: var(--body-2);
+    transition: transform 0.3s ease;
+  }
+  
+  .site-frame-top, .site-frame-bottom {
+    left: 0;
+    width: 100%;
+    height: 5px;
+    transform: scaleY(var(--gap-size));
+  }
+  
+  .site-frame-top {
+    top: 0;
+    transform-origin: top center;
+  }
+  
+  .site-frame-bottom {
+    bottom: 0;
+    transform-origin: bottom center;
+  }
+  
+  .site-frame-left, .site-frame-right {
+    top: 0;
+    height: 100%;
+    width: 5px;
+    transform: scaleX(var(--gap-size));
+  }
+  
+  .site-frame-left {
+    left: 0;
+    transform-origin: left center;
+  }
+  
+  .site-frame-right {
+    right: 0;
+    transform-origin: right center;
+  }
+
+  @media only screen and (max-width:992px){
+  .site-frame.site-frame-bottom{
+    display:none;
+  }
+}
+`;
     document.head.appendChild(style);
   }
 
@@ -695,68 +701,68 @@ const VideoModal = {
     $('<style>')
       .text(
         `
-          .video-modal-overlay {
-              position: fixed;
-              top: 0;
-              left: 0;
-              width: 100vw;
-              height: 100vh;
-              background: rgba(0, 0, 0, 0.8);
-              z-index: 9998;
-              backdrop-filter: blur(10px);
-          }
-          
-          .video-modal-container {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-          }
-          
-          .video-modal-wrapper {
-              width: 80%;
-              max-width: 1200px;
-              position: relative;
-              border-radius: 12px;
-              overflow: hidden;
-              box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
-          }
-          
-          .video-modal-wrapper .hp-hero_content-visual {
-              width: 100% !important;
-              height: 100% !important;
-              object-fit: cover;
-          }
-          
-          .video-modal-wrapper video {
-              width: 100% !important;
-              height: 100% !important;
-              object-fit: cover;
-          }
-          
-          .video-modal-close {
-              position: absolute;
-              top: 20px;
-              right: 20px;
-              width: 40px;
-              height: 40px;
-              background: var(--body1);
-              color: var(--text-1);
-              border-radius: 50%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 24px;
-              font-weight: bold;
-              cursor: pointer;
-              z-index: 10000;
-              transition: all 0.2s ease;
-          }
-          
-          .video-modal-close:hover {
-              background: white;
-              transform: scale(1.1);
-          }
-      `
+        .video-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9998;
+            backdrop-filter: blur(10px);
+        }
+        
+        .video-modal-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .video-modal-wrapper {
+            width: 80%;
+            max-width: 1200px;
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+        }
+        
+        .video-modal-wrapper .hp-hero_content-visual {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+        }
+        
+        .video-modal-wrapper video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+        }
+        
+        .video-modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: var(--body1);
+            color: var(--text-1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10000;
+            transition: all 0.2s ease;
+        }
+        
+        .video-modal-close:hover {
+            background: white;
+            transform: scale(1.1);
+        }
+    `
       )
       .appendTo('head');
   },
@@ -872,17 +878,6 @@ function initBackHome() {
   );
 }
 
-function setFrameHeight() {
-  var windowHeight = $(window).height();
-  $('.site-frame-container').css('height', windowHeight + 'px');
-}
-
-setFrameHeight();
-
-$(window).resize(function () {
-  setFrameHeight();
-});
-
 // -- Homepage
 function animateHomepageHero() {
   $('.hp-hero_content-block').each(function () {
@@ -907,6 +902,33 @@ function animateHomepageHero() {
       duration: 1.5,
       ease: 'power3.inOut',
     });
+  });
+}
+
+function animateHeroScrol() {
+  let tl = gsap.timeline({
+    scrollTrigger: {
+      trigger: $('.hp-hero'),
+      start: 'center top',
+      end: 'bottom top',
+      markers: true,
+      scrub: 1,
+      onEnterBack: () => {
+        gsap.to($('.hp-work_head-link'), {
+          rotate: 0,
+        });
+      },
+      onLeave: () => {
+        gsap.to($('.hp-work_head-link'), {
+          rotate: 180,
+        });
+      },
+    },
+  });
+
+  tl.to($('.hp-hero').add('.nav_wrapper'), {
+    opacity: 0.1,
+    filter: 'blur(5px)',
   });
 }
 
@@ -2757,11 +2779,11 @@ function initSiteFunctionality(data) {
   });
   window.initDarkModeToggle();
   VideoModal.init();
-  setFrameHeight();
 }
 
 // Pages
 function initHomepage() {
+  animateHeroScrol();
   initWorkScroll();
   animateHomepageHero();
   animateWorksLinks('.hp-hero_content-clients ul', '.hp-hero_links');
@@ -2958,7 +2980,7 @@ function initBarba() {
 
       async enter(data) {
         await transitionPages(data);
-        resetWebflow(data);
+        //resetWebflow(data);
       },
 
       async after(data) {
@@ -2978,28 +3000,28 @@ function initBarba() {
   function addTransitionStyles() {
     const transitionStyles = document.createElement('style');
     transitionStyles.innerHTML = `
-    .barba-container {
-      position: relative;
-    }
-    
-    html.is-animating .barba-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-    }
+  .barba-container {
+    position: relative;
+  }
+  
+  html.is-animating .barba-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
 
-    .work-item-clone {
-      position: fixed;
-      z-index: 9999;
-      pointer-events: none;
-      transition: none;
-      will-change: transform, width, height, top, left;
-      transform-origin: center center;
-      box-shadow: 0 5px 25px rgba(0, 0, 0, 0.1);
-    }
-  `;
+  .work-item-clone {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    transition: none;
+    will-change: transform, width, height, top, left;
+    transform-origin: center center;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.1);
+  }
+`;
     document.head.appendChild(transitionStyles);
   }
 
