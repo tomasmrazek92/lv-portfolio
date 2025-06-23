@@ -53,24 +53,56 @@ export const fragmentShader = `
     vec3 color = vec3(0.0);
     float alpha = 0.0;
     
-    float imageHeight = 0.68;
-    float imageMargin = 0.03;
+    float textHeight = 0.32;
+    float textMargin = 0.05;
+    float imageMargin = 0.05;
     
+    float actualTextMargin = textMargin;
+    float actualTextHeight = textHeight;
     float actualImageMargin = imageMargin;
-    float actualImageHeight = imageHeight;
+    float actualImageHeight;
+    
     if (isHovered) {
       float scaleReduction = uHoverIntensity * 0.02;
       actualImageMargin = imageMargin + scaleReduction;
-      actualImageHeight = imageHeight - scaleReduction;
     }
     
+    bool inTextArea = cellUV.x >= actualTextMargin && cellUV.x <= (1.0 - actualTextMargin) && 
+                      cellUV.y >= actualTextMargin && cellUV.y <= actualTextHeight;
+    
+    if (inTextArea) {
+      vec2 textCoord = vec2(
+        (cellUV.x - actualTextMargin) / (1.0 - 2.0 * actualTextMargin),
+        (cellUV.y - actualTextMargin) / (actualTextHeight - actualTextMargin)
+      );
+      
+      float atlasX = mod(texIndex, uAtlasWidth);
+      float atlasY = floor(texIndex / uAtlasWidth);
+      vec2 atlasUV = (vec2(atlasX, atlasY) + textCoord) / vec2(uAtlasWidth, uAtlasHeight);
+      atlasUV.y = 1.0 - atlasUV.y;
+      
+      vec4 textColor = texture2D(uTextAtlas, atlasUV);
+      
+      if (textColor.a > 0.1) {
+        color = textColor.rgb;
+        alpha = textColor.a;
+        
+        if (isHovered) {
+          color = mix(color, uHoverColor.rgb, uHoverIntensity * uHoverColor.a * 0.2);
+        }
+      }
+    }
+    
+    float imageY = textHeight + 0.02;
+    actualImageHeight = 1.0 - imageY - actualImageMargin;
+    
     bool inImageArea = cellUV.x >= actualImageMargin && cellUV.x <= (1.0 - actualImageMargin) && 
-                       cellUV.y >= actualImageMargin && cellUV.y <= actualImageHeight;
+                       cellUV.y >= imageY && cellUV.y <= (imageY + actualImageHeight);
     
     if (inImageArea) {
       vec2 imageUV = vec2(
         (cellUV.x - actualImageMargin) / (1.0 - 2.0 * actualImageMargin),
-        (cellUV.y - actualImageMargin) / (actualImageHeight - actualImageMargin)
+        (cellUV.y - imageY) / actualImageHeight
       );
       
       float atlasX = mod(texIndex, uAtlasWidth);
@@ -84,35 +116,6 @@ export const fragmentShader = `
       
       if (isHovered) {
         color = mix(color, uHoverColor.rgb, uHoverIntensity * uHoverColor.a * 0.3);
-      }
-    }
-    
-    float textY = 0.68 + 0.04;
-    float textHeight = 1.0 - textY - imageMargin;
-    
-    bool inTextArea = cellUV.x >= imageMargin && cellUV.x <= (1.0 - imageMargin) && 
-                      cellUV.y >= textY && cellUV.y <= (textY + textHeight);
-    
-    if (inTextArea) {
-      vec2 textCoord = vec2(
-        (cellUV.x - imageMargin) / (1.0 - 2.0 * imageMargin),
-        (cellUV.y - textY) / textHeight
-      );
-      textCoord.y = 1.0 - textCoord.y;
-      
-      float atlasX = mod(texIndex, uAtlasWidth);
-      float atlasY = floor(texIndex / uAtlasWidth);
-      vec2 atlasUV = (vec2(atlasX, atlasY) + textCoord) / vec2(uAtlasWidth, uAtlasHeight);
-      
-      vec4 textColor = texture2D(uTextAtlas, atlasUV);
-      
-      if (textColor.a > 0.1) {
-        color = textColor.rgb;
-        alpha = textColor.a;
-        
-        if (isHovered) {
-          color = mix(color, uHoverColor.rgb, uHoverIntensity * uHoverColor.a * 0.2);
-        }
       }
     }
         

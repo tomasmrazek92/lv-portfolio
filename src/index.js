@@ -173,46 +173,31 @@ function initPageGap() {
   }
 }
 
+var scrollPosition = 0;
+
 function pauseScroll(state) {
   // Pause Lenis scrolling during transition
   if (window.lenisInstance) {
     if (state === true) {
-      window.lenisInstance.stop();
       disableScroll();
-      lenisInstance.scrollTo(0);
     } else {
-      window.lenisInstance.start();
-      lenisInstance.scrollTo(0);
       enableScroll();
     }
   }
 
-  var $body = $('body');
-  var scrollPosition = 0;
-  var isScrollDisabled = false;
-  var currentBreakpoint = '';
-
   function disableScroll() {
-    var oldWidth = $('body').innerWidth();
-    scrollPosition = window.pageYOffset;
-    $('body').css({
-      overflow: 'hidden',
-      position: 'fixed',
-      top: `-${scrollPosition}px`,
-      width: oldWidth,
+    scrollPosition = window.scrollY;
+    window.lenisInstance.scrollTo(0, {
+      immediate: true,
+      onComplete: () => {
+        window.lenisInstance.stop();
+      },
     });
-    isScrollDisabled = true;
   }
 
   function enableScroll() {
-    $('body').css({
-      overflow: '',
-      position: '',
-      top: '',
-      width: '',
-    });
-    $(window).scrollTop(scrollPosition);
-    isScrollDisabled = false;
+    window.lenisInstance.start();
+    window.lenisInstance.scrollTo(scrollPosition, {});
   }
 }
 
@@ -380,37 +365,37 @@ function handleAnchorScroll() {
     }
   }
 
-  $(document).ready(function () {
-    const urlParams = new URLSearchParams(window.location.search);
-    const anchorId = urlParams.get('anchor');
+  const urlParams = new URLSearchParams(window.location.search);
+  const anchorId = urlParams.get('anchor');
 
-    if (anchorId) scrollToAnchor(anchorId);
+  console.log(anchorId);
 
-    $('a[href^="?anchor="], a[href^="#"], a[href*="' + window.location.pathname + '?anchor="]').on(
-      'click',
-      function (e) {
-        const href = $(this).attr('href');
-        let anchorId;
+  if (anchorId) scrollToAnchor(anchorId);
 
-        if (href.startsWith('#')) {
-          anchorId = href.substring(1);
-        } else if (href.includes('?anchor=')) {
-          const urlParts = href.split('?');
-          const currentPath = window.location.pathname;
-          const linkPath = urlParts[0] || currentPath;
+  $('a[href^="?anchor="], a[href^="#"], a[href*="' + window.location.pathname + '?anchor="]').on(
+    'click',
+    function (e) {
+      const href = $(this).attr('href');
+      let anchorId;
 
-          if (linkPath === currentPath || linkPath === '') {
-            e.preventDefault();
-            anchorId = new URLSearchParams(urlParts[1]).get('anchor');
-          }
-        }
+      if (href.startsWith('#')) {
+        anchorId = href.substring(1);
+      } else if (href.includes('?anchor=')) {
+        const urlParts = href.split('?');
+        const currentPath = window.location.pathname;
+        const linkPath = urlParts[0] || currentPath;
 
-        if (anchorId) {
-          scrollToAnchor(anchorId, true);
+        if (linkPath === currentPath || linkPath === '') {
+          e.preventDefault();
+          anchorId = new URLSearchParams(urlParts[1]).get('anchor');
         }
       }
-    );
-  });
+
+      if (anchorId) {
+        scrollToAnchor(anchorId, true);
+      }
+    }
+  );
 }
 
 function initClipboardCopy() {
@@ -491,44 +476,52 @@ const VideoModal = {
   $videoWrapper: null,
   $originalElement: null,
   originalMaxWidth: null,
-  originalPlayer: null,
+  originalPlayers: [],
   modalPlayer: null,
 
   init() {
-    this.initOriginalPlyr();
+    this.initOriginalPlyrs();
     this.bindEvents();
     this.addStyles();
   },
 
-  initOriginalPlyr() {
-    const $videoEl = $('.hp-hero_content-visual .plyr_video');
-    if ($videoEl.length) {
-      this.originalPlayer = new Plyr($videoEl[0], {
-        controls: ['play', 'progress', 'mute', 'fullscreen'],
-        muted: true,
-        autoplay: true,
-        loop: { active: true },
-      });
+  initOriginalPlyrs() {
+    const $videoEls = $('.plyr_video');
+    if ($videoEls.length) {
+      this.originalPlayers = [];
 
-      $('.plyr__controls').hide();
+      $videoEls.each((index, videoEl) => {
+        const player = new Plyr(videoEl, {
+          controls: ['play', 'progress', 'mute', 'fullscreen'],
+          muted: true,
+          autoplay: true,
+          loop: { active: true },
+        });
 
-      this.originalPlayer.on('ready', () => {
-        setTimeout(() => {
-          this.originalPlayer.play();
-          this.originalPlayer.muted = true;
-        }, 100);
-      });
+        $(videoEl).closest('[data-video-player]').find('.plyr__controls').hide();
 
-      this.originalPlayer.on('loadeddata', () => {
-        this.originalPlayer.play();
+        player.on('ready', () => {
+          setTimeout(() => {
+            player.play();
+            player.muted = true;
+          }, 100);
+        });
+
+        player.on('loadeddata', () => {
+          player.play();
+        });
+
+        this.originalPlayers.push(player);
       });
     }
   },
 
   bindEvents() {
-    $('.hp-hero_content-visual').click((e) => {
-      e.preventDefault();
-      this.open($(e.currentTarget));
+    $('[data-video-player]').each((index, element) => {
+      $(element).click((e) => {
+        e.preventDefault();
+        this.open($(e.currentTarget));
+      });
     });
   },
 
@@ -606,7 +599,7 @@ const VideoModal = {
   },
 
   activateModalVideo() {
-    const $clonedElement = this.$videoWrapper.find('.hp-hero_content-visual');
+    const $clonedElement = this.$videoWrapper.find('[data-video-player]');
     const $videoEl = $clonedElement.find('.plyr_video');
 
     if ($videoEl.length) {
@@ -727,7 +720,7 @@ const VideoModal = {
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
         }
         
-        .video-modal-wrapper .hp-hero_content-visual {
+        .video-modal-wrapper [data-video-player] {
             width: 100% !important;
             height: 100% !important;
             object-fit: cover;
@@ -767,6 +760,104 @@ const VideoModal = {
       .appendTo('head');
   },
 };
+
+function initDynamicCustomTextCursor() {
+  let cursorItem = document.querySelector('.cursor');
+  let cursorParagraph = cursorItem.querySelector('p');
+  let targets = document.querySelectorAll('[data-cursor]');
+  let xOffset = 6;
+  let yOffset = 140;
+  let cursorIsOnRight = false;
+  let currentTarget = null;
+  let lastText = '';
+
+  // Position cursor relative to actual cursor position on page load
+  gsap.set(cursorItem, { xPercent: xOffset, yPercent: yOffset, scale: 0.8 });
+
+  // Use GSAP quick.to for a more performative tween on the cursor
+  let xTo = gsap.quickTo(cursorItem, 'x', { ease: 'power3' });
+  let yTo = gsap.quickTo(cursorItem, 'y', { ease: 'power3' });
+
+  // Function to get the width of the cursor element including a buffer
+  const getCursorEdgeThreshold = () => {
+    return cursorItem.offsetWidth + 16; // Cursor width + 16px margin
+  };
+
+  // On mousemove, call the quickTo functions to the actual cursor position
+  window.addEventListener('mousemove', (e) => {
+    let windowWidth = window.innerWidth;
+    let windowHeight = window.innerHeight;
+    let { scrollY } = window;
+    let cursorX = e.clientX;
+    let cursorY = e.clientY + scrollY; // Adjust cursorY to account for scroll
+
+    // Default offsets
+    let xPercent = xOffset;
+    let yPercent = yOffset;
+
+    // Adjust X offset dynamically based on cursor width
+    let cursorEdgeThreshold = getCursorEdgeThreshold();
+    if (cursorX > windowWidth - cursorEdgeThreshold) {
+      cursorIsOnRight = true;
+      xPercent = -100;
+    } else {
+      cursorIsOnRight = false;
+    }
+
+    // Adjust Y offset if in the bottom 10% of the current viewport
+    if (cursorY > scrollY + windowHeight * 0.9) {
+      yPercent = -120;
+    }
+
+    if (currentTarget) {
+      let newText = currentTarget.getAttribute('data-cursor');
+      if (newText !== lastText) {
+        // Only update if the text is different
+        cursorParagraph.innerHTML = newText;
+        lastText = newText;
+
+        // Recalculate edge awareness whenever the text changes
+        cursorEdgeThreshold = getCursorEdgeThreshold();
+      }
+    }
+
+    gsap.to(cursorItem, {
+      xPercent: xPercent,
+      yPercent: yPercent,
+      duration: 0.9,
+      scale: 1,
+      ease: 'power3',
+    });
+    xTo(cursorX);
+    yTo(cursorY - scrollY);
+  });
+
+  // Add a mouse enter listener for each link that has a data-cursor attribute
+  targets.forEach((target) => {
+    target.addEventListener('mouseenter', () => {
+      currentTarget = target; // Set the current target
+
+      let newText = target.getAttribute('data-cursor');
+
+      // Update only if the text changes
+      if (newText !== lastText) {
+        cursorParagraph.innerHTML = newText;
+        lastText = newText;
+
+        // Recalculate edge awareness whenever the text changes
+        let cursorEdgeThreshold = getCursorEdgeThreshold();
+      }
+
+      if (target.tagName !== 'A') {
+        cursorItem.style.backgroundColor = 'var(--text-3)';
+        cursorItem.style.color = 'var(--body-2)';
+      } else {
+        cursorItem.style.backgroundColor = '';
+        cursorItem.style.color = '';
+      }
+    });
+  });
+}
 
 // -- Nav
 function initNav() {
@@ -906,29 +997,33 @@ function animateHomepageHero() {
 }
 
 function animateHeroScrol() {
-  let tl = gsap.timeline({
-    scrollTrigger: {
-      trigger: $('.hp-hero'),
-      start: 'center top',
-      end: 'bottom top',
-      markers: true,
-      scrub: 1,
-      onEnterBack: () => {
-        gsap.to($('.hp-work_head-link'), {
-          rotate: 0,
-        });
-      },
-      onLeave: () => {
-        gsap.to($('.hp-work_head-link'), {
-          rotate: 180,
-        });
-      },
-    },
-  });
+  // create
+  let mm = gsap.matchMedia();
 
-  tl.to($('.hp-hero').add('.nav_wrapper'), {
-    opacity: 0.1,
-    filter: 'blur(5px)',
+  // add a media query. When it matches, the associated function will run
+  mm.add('(min-width: 992px)', () => {
+    let tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: $('.hp-hero'),
+        start: 'center top',
+        end: 'bottom top',
+        scrub: 1,
+        onEnterBack: () => {
+          gsap.to($('.hp-work_head-link'), {
+            rotate: 0,
+          });
+        },
+        onLeave: () => {
+          gsap.to($('.hp-work_head-link'), {
+            rotate: 180,
+          });
+        },
+      },
+    });
+
+    tl.to($('.hp-hero').add('.nav_wrapper'), {
+      opacity: 0.1,
+    });
   });
 }
 
@@ -964,104 +1059,6 @@ function animateWorksLinks(list, listitem) {
       });
     }
   );
-}
-
-function initDynamicCustomTextCursor() {
-  let cursorItem = document.querySelector('.cursor');
-  let cursorParagraph = cursorItem.querySelector('p');
-  let targets = document.querySelectorAll('[data-cursor]');
-  let xOffset = 6;
-  let yOffset = 140;
-  let cursorIsOnRight = false;
-  let currentTarget = null;
-  let lastText = '';
-
-  // Position cursor relative to actual cursor position on page load
-  gsap.set(cursorItem, { xPercent: xOffset, yPercent: yOffset, scale: 0.8 });
-
-  // Use GSAP quick.to for a more performative tween on the cursor
-  let xTo = gsap.quickTo(cursorItem, 'x', { ease: 'power3' });
-  let yTo = gsap.quickTo(cursorItem, 'y', { ease: 'power3' });
-
-  // Function to get the width of the cursor element including a buffer
-  const getCursorEdgeThreshold = () => {
-    return cursorItem.offsetWidth + 16; // Cursor width + 16px margin
-  };
-
-  // On mousemove, call the quickTo functions to the actual cursor position
-  window.addEventListener('mousemove', (e) => {
-    let windowWidth = window.innerWidth;
-    let windowHeight = window.innerHeight;
-    let { scrollY } = window;
-    let cursorX = e.clientX;
-    let cursorY = e.clientY + scrollY; // Adjust cursorY to account for scroll
-
-    // Default offsets
-    let xPercent = xOffset;
-    let yPercent = yOffset;
-
-    // Adjust X offset dynamically based on cursor width
-    let cursorEdgeThreshold = getCursorEdgeThreshold();
-    if (cursorX > windowWidth - cursorEdgeThreshold) {
-      cursorIsOnRight = true;
-      xPercent = -100;
-    } else {
-      cursorIsOnRight = false;
-    }
-
-    // Adjust Y offset if in the bottom 10% of the current viewport
-    if (cursorY > scrollY + windowHeight * 0.9) {
-      yPercent = -120;
-    }
-
-    if (currentTarget) {
-      let newText = currentTarget.getAttribute('data-cursor');
-      if (newText !== lastText) {
-        // Only update if the text is different
-        cursorParagraph.innerHTML = newText;
-        lastText = newText;
-
-        // Recalculate edge awareness whenever the text changes
-        cursorEdgeThreshold = getCursorEdgeThreshold();
-      }
-    }
-
-    gsap.to(cursorItem, {
-      xPercent: xPercent,
-      yPercent: yPercent,
-      duration: 0.9,
-      scale: 1,
-      ease: 'power3',
-    });
-    xTo(cursorX);
-    yTo(cursorY - scrollY);
-  });
-
-  // Add a mouse enter listener for each link that has a data-cursor attribute
-  targets.forEach((target) => {
-    target.addEventListener('mouseenter', () => {
-      currentTarget = target; // Set the current target
-
-      let newText = target.getAttribute('data-cursor');
-
-      // Update only if the text changes
-      if (newText !== lastText) {
-        cursorParagraph.innerHTML = newText;
-        lastText = newText;
-
-        // Recalculate edge awareness whenever the text changes
-        let cursorEdgeThreshold = getCursorEdgeThreshold();
-      }
-
-      if (target.tagName !== 'A') {
-        cursorItem.style.backgroundColor = 'var(--text-3)';
-        cursorItem.style.color = 'var(--body-2)';
-      } else {
-        cursorItem.style.backgroundColor = '';
-        cursorItem.style.color = '';
-      }
-    });
-  });
 }
 
 function initWorkScroll() {
@@ -1147,19 +1144,13 @@ function animateWorkLoad() {
   let visualList = '.work-d_hero-wrap.cc-images .work-d_hero-list';
   let visualItem = '.work-d_hero-wrap.cc-images .work-d_hero-list-item';
   let timeline = '.work-d_hero-timeline-box';
+  let navigation = '.work-navigation';
 
   tl.set(
-    [timeline],
+    [timeline, navigation],
     {
       y: '10vh',
       rotate: 0.001,
-    },
-    '<'
-  );
-
-  tl.set(
-    timeline,
-    {
       opacity: 0,
     },
     '<'
@@ -1194,7 +1185,7 @@ function animateWorkLoad() {
     '<'
   );
   tl.to(
-    timeline,
+    [timeline, navigation],
     {
       duration: 2.1,
       ease: 'Expo.easeInOut',
@@ -1230,19 +1221,33 @@ function animateWorkTimeline() {
     // Set initial position
     gsap.set(timelineInner, { y: 0, x: 0 }); // Reset both axes
 
+    let itemsTl = gsap.timeline({ paused: true });
+    itemsTl.fromTo(
+      timelineItems.find('.work-d_hero-timeline_mask'),
+      {
+        yPercent: 50,
+        opacity: 0,
+      },
+      { yPercent: 0, opacity: 1, stagger: 0.2 }
+    );
+
     scrollTriggerInstance = ScrollTrigger.create({
       trigger: wrap[0],
       onEnter: () => {
         timeline.addClass('cc-active');
+        itemsTl.play();
       },
       onEnterBack: () => {
         timeline.addClass('cc-active');
+        itemsTl.play();
       },
       onLeave: () => {
         timeline.removeClass('cc-active');
+        itemsTl.reverse();
       },
       onLeaveBack: () => {
         timeline.removeClass('cc-active');
+        itemsTl.reverse();
       },
       start: () => {
         const firstItemTop = firstItem.offset().top;
@@ -1257,7 +1262,6 @@ function animateWorkTimeline() {
         return lastItemCenter + 'px center';
       },
       scrub: 0,
-      markers: true,
       onUpdate: (self) => {
         // Check screen size
         const isSmallScreen = $(window).width() < 992;
@@ -1894,11 +1898,10 @@ function initLabsGrid() {
     const $item = $(this);
 
     const project = {
+      id: $item.attr('data-lab-item'),
       title: $item.find('[data-lab-title]').text().trim(),
       desc: $item.find('[data-lab-desc]').text().trim(),
       image: $item.find('[data-lab-img]').attr('src'),
-      year: $item.find('[data-lab-date]').text(),
-      href: $item.find('[data-lab-link]').attr('href'),
     };
 
     projects.push(project);
@@ -2083,6 +2086,12 @@ function initLabsGrid() {
     });
   };
 
+  const getProjectAtCell = (cellX, cellY) => {
+    const texIndex = Math.floor((cellX + cellY * 3.0) % projects.length);
+    const actualIndex = texIndex < 0 ? projects.length + texIndex : texIndex;
+    return projects[actualIndex];
+  };
+
   const updateHoveredCell = () => {
     if (!renderer || mousePosition.x < 0 || mousePosition.y < 0) {
       targetHoveredCell = { x: -999, y: -999 };
@@ -2208,18 +2217,114 @@ function initLabsGrid() {
 
         const cellX = Math.floor((worldX / config.cellSize) * 0.88);
         const cellY = Math.floor((worldY / config.cellSize) * 0.95);
-        const texIndex = Math.floor((cellX + cellY * 3.0) % projects.length);
-        const actualIndex = texIndex < 0 ? projects.length + texIndex : texIndex;
 
-        if (projects[actualIndex]?.href) {
-          if (typeof barba !== 'undefined' && barba.go) {
-            barba.go(projects[actualIndex].href);
-          } else {
-            window.location.href = projects[actualIndex].href;
-          }
+        const clickedProject = getProjectAtCell(cellX, cellY);
+
+        if (clickedProject) {
+          console.log('Clicked project:', clickedProject.id);
+          modalController.open(clickedProject.id);
         }
       }
     }
+  };
+
+  const modalController = {
+    activePlayer: null,
+
+    init() {
+      this.setupEventListeners();
+    },
+
+    setupEventListeners() {
+      $('[data-modal-close]').on('click', () => this.close());
+
+      $(document).on('keydown', (event) => {
+        if (event.key === 'Escape') this.close();
+      });
+
+      $('.labs-modal_wrap').on('click', (event) => {
+        const $target = $(event.target);
+        const $videoContainer = $('.labs-modal_video:visible');
+        const $imageContainer = $('.labs-modal_img-item:visible');
+
+        if (
+          !$target.closest('.labs-modal_video').length &&
+          !$target.closest('.labs-modal_img-item').length
+        ) {
+          this.close();
+        }
+      });
+    },
+
+    open(id) {
+      pauseScroll(true);
+      $('.labs-modal_wrap').css('display', 'flex');
+      $('[data-lab-item]').hide();
+
+      const $modal = $(`[data-lab-item="${id}"]`);
+      $modal.show();
+
+      this.handleMediaType($modal);
+    },
+
+    close() {
+      this.destroyVideo();
+      pauseScroll(false);
+      $('[data-lab-item]').hide();
+      $('.labs-modal_wrap').css('display', 'none');
+    },
+
+    handleMediaType($modal) {
+      const $videoContainer = $modal.find('.labs-modal_video');
+      const $imageContainer = $modal.find('.labs-modal_img-item');
+      const $video = $videoContainer.find('video');
+
+      $videoContainer.hide();
+      $imageContainer.hide();
+
+      if ($video.length) {
+        const $source = $video.find('source');
+        const videoSrc = $source.attr('src') || $video.attr('src');
+
+        if (videoSrc && videoSrc.trim() !== '') {
+          $videoContainer.show();
+          this.initializeVideo($video);
+        } else {
+          $imageContainer.css('display', 'flex');
+        }
+      } else {
+        $imageContainer.css('display', 'flex');
+      }
+    },
+
+    initializeVideo($video) {
+      if (typeof Plyr !== 'undefined') {
+        this.activePlayer = new Plyr($video[0], {
+          controls: [
+            'play-large',
+            'play',
+            'progress',
+            'current-time',
+            'mute',
+            'volume',
+            'fullscreen',
+          ],
+          autoplay: false,
+          loop: { active: true },
+        });
+
+        this.activePlayer.on('ready', () => {
+          this.activePlayer.play();
+        });
+      }
+    },
+
+    destroyVideo() {
+      if (this.activePlayer) {
+        this.activePlayer.destroy();
+        this.activePlayer = null;
+      }
+    },
   };
 
   const onWindowResize = () => {
@@ -2341,64 +2446,35 @@ function initLabsGrid() {
   };
 
   const init = async () => {
-    console.log('1. Init started');
-
     const container = document.getElementById('gallery');
     if (!container) {
-      console.log('ERROR: Gallery container not found!');
       return;
     }
-    console.log(
-      '2. Container found:',
-      container,
-      'Size:',
-      container.offsetWidth,
-      'x',
-      container.offsetHeight
-    );
 
     const existingCanvas = container.querySelector('canvas');
     if (existingCanvas) {
-      console.log('3. Removing existing canvas');
       existingCanvas.remove();
     }
 
-    console.log('4. Projects count:', projects.length);
     if (projects.length === 0) {
-      console.log('ERROR: No projects found');
       return;
     }
 
     scene = new THREE.Scene();
     camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
-    console.log('5. Scene and camera created');
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(container.offsetWidth, container.offsetHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    console.log('6. Renderer created');
 
     renderer.setClearColor(new THREE.Color(0, 0, 0), 0);
     container.appendChild(renderer.domElement);
-    console.log('7. Canvas appended to container');
-    console.log('7a. Canvas element:', renderer.domElement, $('canvas'));
-    console.log('7b. Canvas size:', renderer.domElement.width, 'x', renderer.domElement.height);
-    console.log('7c. Canvas style:', renderer.domElement.style.cssText);
-    console.log('7d. Container children count:', container.children.length);
 
-    console.log('8. Loading textures...');
     const imageTextures = await loadTextures();
-    console.log('9. Textures loaded:', imageTextures.length);
 
     const imageResult = createTextureAtlas(imageTextures, false);
     const textResult = createTextureAtlas(textTextures, true);
-    console.log(
-      '10. Atlases created - Image:',
-      imageResult.atlasWidth,
-      'Text:',
-      textResult.atlasWidth
-    );
 
     const uniforms = {
       uOffset: { value: new THREE.Vector2(0, 0) },
@@ -2418,64 +2494,26 @@ function initLabsGrid() {
       uHoveredCell: { value: new THREE.Vector2(-999, -999) },
       uHoverIntensity: { value: 0.0 },
     };
-    console.log('11. Uniforms created');
-
     const geometry = new THREE.PlaneGeometry(2, 2);
-    console.log('12. Geometry created');
-
-    console.log(
-      '13. Shader check - Vertex:',
-      typeof vertexShader,
-      'Fragment:',
-      typeof fragmentShader
-    );
 
     const material = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
       uniforms,
     });
-    console.log('14. Material created');
 
     material.needsUpdate = true;
     renderer.compile(scene, camera);
-    console.log('15. Scene compiled');
 
     plane = new THREE.Mesh(geometry, material);
     scene.add(plane);
-    console.log('16. Plane added to scene');
 
     setupEventListeners();
-    console.log('17. Event listeners setup');
 
     setupThemeObserver();
-    console.log('18. Theme observer setup');
 
     animate();
-    console.log('19. Animation started - Setup complete!');
-
-    console.log('20. Canvas element:', $('canvas'));
-
-    setTimeout(() => {
-      console.log('20. Post-render check:');
-      console.log('20a. Canvas in DOM:', document.contains(renderer.domElement));
-      console.log(
-        '20b. Canvas visible:',
-        renderer.domElement.offsetWidth > 0 && renderer.domElement.offsetHeight > 0
-      );
-      setTimeout(() => {
-        console.log('20e. Renderer info:', renderer.info.render, $('canvas'));
-
-        // Schedule multiple checks to see when it disappears
-        setTimeout(() => console.log('Check 1ms later:', $('canvas').length), 1);
-        setTimeout(() => console.log('Check 5ms later:', $('canvas').length), 5);
-        setTimeout(() => console.log('Check 10ms later:', $('canvas').length), 10);
-        setTimeout(() => console.log('Check 50ms later:', $('canvas').length), 50);
-        setTimeout(() => console.log('Check 100ms later:', $('canvas').length), 1000);
-      }, 100);
-      console.log('20d. Container computed style:', getComputedStyle(container).display);
-      console.log('20e. Renderer info:', renderer.info.render, $('canvas'));
-    }, 100);
+    modalController.init();
   };
 
   init();
@@ -2596,7 +2634,6 @@ function initMaskTextReveal(el) {
             trigger: heading[0],
             start: 'clamp(top 80%)',
             once: true,
-            markers: heading.data('debug-markers') === 'true',
             onEnter: animateText,
           });
 
@@ -2673,7 +2710,6 @@ function initItemReveal(el) {
           trigger: item[0],
           start: 'clamp(top 95%)',
           once: true,
-          markers: item.data('debug-markers') === 'true',
           onEnter: animateItem,
         });
 
@@ -2761,7 +2797,7 @@ function initButtonCharacterStagger() {
 }
 
 // Global
-function initSiteFunctionality(data) {
+function initSiteFunctionality() {
   initNav();
   initPageGap();
   initLenis();
@@ -2772,6 +2808,7 @@ function initSiteFunctionality(data) {
   initCSSMarquee();
   initBackHome();
   initClipboardCopy();
+  handleAnchorScroll();
   document.fonts.ready.then(function () {
     initMaskTextReveal('[data-split="heading"]');
     initItemReveal('[data-item-reveal]');
@@ -2800,6 +2837,7 @@ function initAbout() {
     initAboutImgs();
     initGridReveal();
     animateWorksLinks('.about_clients-list.cc-clients', '.about_clients-item');
+    initDynamicCustomTextCursor();
   }, 500);
 }
 function initWhy() {
@@ -2980,7 +3018,7 @@ function initBarba() {
 
       async enter(data) {
         await transitionPages(data);
-        //resetWebflow(data);
+        resetWebflow(data);
       },
 
       async after(data) {
@@ -2989,7 +3027,6 @@ function initBarba() {
         document.documentElement.classList.remove('is-animating');
         handleAnchorScroll();
         if (data.next.namespace === 'labs') {
-          console.log('labs after');
           initLabs();
         }
       },
