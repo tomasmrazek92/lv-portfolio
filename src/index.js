@@ -187,6 +187,12 @@ function pauseScroll(state) {
 
   function disableScroll() {
     scrollPosition = window.scrollY;
+    $('body').css({
+      overflow: 'hidden',
+      position: 'fixed',
+      top: `0`,
+      width: '100%',
+    });
     window.lenisInstance.scrollTo(0, {
       immediate: true,
       onComplete: () => {
@@ -196,6 +202,12 @@ function pauseScroll(state) {
   }
 
   function enableScroll() {
+    $('body').css({
+      overflow: '',
+      position: '',
+      top: '',
+      width: '',
+    });
     window.lenisInstance.start();
     window.lenisInstance.scrollTo(scrollPosition, {});
   }
@@ -1202,12 +1214,10 @@ function animateWorkTimeline() {
   let scrollTriggerInstance;
 
   function initializeTimeline() {
-    // Kill existing ScrollTrigger if it exists
     if (scrollTriggerInstance) {
       scrollTriggerInstance.kill();
     }
 
-    // Recalculate all variables on each initialization
     let wrap = $('.work-d_hero-part.cc-images');
     let list = $('.work-d_hero-list');
     let items = $('.work-d_hero-list-item');
@@ -1217,37 +1227,48 @@ function animateWorkTimeline() {
     let lastItem = items.last();
 
     const timelineItems = $('.work-d_hero-timeline_item');
+    const isSmallScreen = $(window).width() < 992;
 
-    // Set initial position
-    gsap.set(timelineInner, { y: 0, x: 0 }); // Reset both axes
+    gsap.set(timelineInner, { y: 0, x: 0 });
 
     let itemsTl = gsap.timeline({ paused: true });
-    itemsTl.fromTo(
-      timelineItems.find('.work-d_hero-timeline_mask'),
-      {
-        yPercent: 50,
-        opacity: 0,
-      },
-      { yPercent: 0, opacity: 1, stagger: 0.2 }
-    );
+
+    if (isSmallScreen) {
+      itemsTl.fromTo(
+        timelineItems.find('.work-d_hero-timeline_mask'),
+        {
+          yPercent: 50,
+          opacity: 0,
+        },
+        { yPercent: 0, opacity: 1, stagger: 0.2 }
+      );
+    }
 
     scrollTriggerInstance = ScrollTrigger.create({
       trigger: wrap[0],
       onEnter: () => {
         timeline.addClass('cc-active');
-        itemsTl.play();
+        if (isSmallScreen) {
+          itemsTl.play();
+        }
       },
       onEnterBack: () => {
         timeline.addClass('cc-active');
-        itemsTl.play();
+        if (isSmallScreen) {
+          itemsTl.play();
+        }
       },
       onLeave: () => {
         timeline.removeClass('cc-active');
-        itemsTl.reverse();
+        if (isSmallScreen) {
+          itemsTl.reverse();
+        }
       },
       onLeaveBack: () => {
         timeline.removeClass('cc-active');
-        itemsTl.reverse();
+        if (isSmallScreen) {
+          itemsTl.reverse();
+        }
       },
       start: () => {
         const firstItemTop = firstItem.offset().top;
@@ -1263,10 +1284,8 @@ function animateWorkTimeline() {
       },
       scrub: 0,
       onUpdate: (self) => {
-        // Check screen size
         const isSmallScreen = $(window).width() < 992;
 
-        // Use fresh calculations each time
         const windowHeight = $(window).height();
         const windowScrollTop = $(window).scrollTop();
         const viewportCenter = windowScrollTop + windowHeight / 2;
@@ -1315,14 +1334,11 @@ function animateWorkTimeline() {
           }
         }
 
-        // Responsive movement: Y-axis for large screens, X-axis for small screens
         if (isSmallScreen) {
-          // X-axis movement for screens < 992px
           const currentItemWidth = timelineItems.first().outerWidth(true);
           const translateX = imageProgress * currentItemWidth;
           gsap.set(timelineInner, { x: -translateX, y: 0 });
         } else {
-          // Y-axis movement for screens >= 992px
           const currentItemHeight = timelineItems.first().outerHeight(true);
           const translateY = imageProgress * currentItemHeight;
           gsap.set(timelineInner, { y: -translateY, x: 0 });
@@ -1330,7 +1346,6 @@ function animateWorkTimeline() {
       },
     });
 
-    // Click handler remains the same
     $(document).off('click.workTimeline', '.work-d_hero-timeline_item');
     $(document).on('click.workTimeline', '.work-d_hero-timeline_item', function () {
       let index = $(this).index();
@@ -2257,6 +2272,8 @@ function initLabsGrid() {
     },
 
     open(id) {
+      this.destroyVideo();
+
       pauseScroll(true);
       $('.labs-modal_wrap').css('display', 'flex');
       $('[data-lab-item]').hide();
@@ -2299,7 +2316,12 @@ function initLabsGrid() {
 
     initializeVideo($video) {
       if (typeof Plyr !== 'undefined') {
-        this.activePlayer = new Plyr($video[0], {
+        const videoElement = $video[0];
+
+        videoElement.currentTime = 0;
+        videoElement.pause();
+
+        this.activePlayer = new Plyr(videoElement, {
           controls: [
             'play-large',
             'play',
@@ -2314,16 +2336,37 @@ function initLabsGrid() {
         });
 
         this.activePlayer.on('ready', () => {
-          this.activePlayer.play();
+          this.activePlayer.currentTime = 0;
+          setTimeout(() => {
+            if (this.activePlayer && $('.labs-modal_wrap').is(':visible')) {
+              this.activePlayer.play();
+            }
+          }, 100);
+        });
+
+        this.activePlayer.on('loadeddata', () => {
+          this.activePlayer.currentTime = 0;
         });
       }
     },
 
     destroyVideo() {
       if (this.activePlayer) {
-        this.activePlayer.destroy();
+        try {
+          this.activePlayer.pause();
+          this.activePlayer.currentTime = 0;
+          this.activePlayer.destroy();
+        } catch (e) {
+          console.log('Error destroying player:', e);
+        }
         this.activePlayer = null;
       }
+
+      $('video').each(function () {
+        this.pause();
+        this.currentTime = 0;
+        this.load();
+      });
     },
   };
 
