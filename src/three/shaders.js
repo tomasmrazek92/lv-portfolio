@@ -83,9 +83,9 @@ export const fragmentShader = `
       
       vec4 textColor = texture2D(uTextAtlas, atlasUV);
       
-      if (textColor.a > 0.1) {
+      if (textColor.a > 0.3) {
         color = textColor.rgb;
-        alpha = textColor.a;
+        alpha = smoothstep(0.2, 0.7, textColor.a);
         
         if (isHovered) {
           color = mix(color, uHoverColor.rgb, uHoverIntensity * uHoverColor.a * 0.2);

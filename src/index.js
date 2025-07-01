@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import { fragmentShader, vertexShader } from './three/shaders.js';
 
-gsap.registerPlugin(SplitText, ScrollTrigger);
+gsap.registerPlugin(SplitText, ScrollTrigger, TextPlugin);
 
 // Functions
 function initLenis() {
@@ -724,8 +724,9 @@ const VideoModal = {
         }
         
         .video-modal-wrapper {
-            width: 80%;
+            width: 100%;
             max-width: 1200px;
+            max-height: 80vh;
             position: relative;
             border-radius: 12px;
             overflow: hidden;
@@ -764,7 +765,8 @@ const VideoModal = {
         }
         
         .video-modal-close:hover {
-            background: white;
+            background: var(--body-2);
+            color: var(--text-2);
             transform: scale(1.1);
         }
     `
@@ -897,15 +899,19 @@ function initDynamicCustomTextCursor() {
 
 function initFooterGif() {
   $('.footer-gif-trigger').on('mouseenter click', function () {
-    $('.footer_gif').css('height', 'auto');
-    let autoHeight = $('.footer_gif').height();
-    $('.footer_gif').css('height', '0');
-    $('.footer_gif').animate(
-      {
-        height: autoHeight,
-      },
-      300
-    );
+    let gif = $('.footer_gif');
+    if (!gif.hasClass('active')) {
+      gif.addClass('active');
+      gif.css('height', 'auto');
+      let autoHeight = $('.footer_gif').height();
+      gif.css('height', '0');
+      gif.animate(
+        {
+          height: autoHeight,
+        },
+        300
+      );
+    }
   });
 }
 
@@ -1053,11 +1059,15 @@ function animateHeroScrol() {
   // create
   let mm = gsap.matchMedia();
 
+  let hero = $('.hp-hero');
+
+  if (!hero.length) return;
+
   // add a media query. When it matches, the associated function will run
   mm.add('(min-width: 992px)', () => {
     let tl = gsap.timeline({
       scrollTrigger: {
-        trigger: $('.hp-hero'),
+        trigger: hero,
         start: 'center top',
         end: 'bottom top',
         scrub: 1,
@@ -1117,6 +1127,7 @@ function animateWorksLinks(list, listitem) {
 function initWorkScroll() {
   let mm = gsap.matchMedia();
   mm.add('(min-width: 992px)', () => {
+    console.log('fires');
     const items = $('.work_slider-item');
     const itemCount = items.length;
     const workWall = $('.work-wall');
@@ -1260,6 +1271,8 @@ function animateWorkTimeline() {
     }
 
     let wrap = $('.work-d_hero-part.cc-images');
+    if (!wrap.length) return;
+
     let list = $('.work-d_hero-list');
     let items = $('.work-d_hero-list-item');
     let timeline = $('.work-d_hero-timeline');
@@ -1937,10 +1950,6 @@ function initAdvancedFormValidation() {
 
 // -- Labs Page
 function initLabsGrid() {
-  console.log('Shaders available:', {
-    vertex: typeof vertexShader,
-    fragment: typeof fragmentShader,
-  });
   const config = {
     cellSize: 0.75,
     zoomLevel: 1.25,
@@ -1949,6 +1958,11 @@ function initLabsGrid() {
     backgroundColor: 'transparent',
     textColor: '#ffffff',
     hoverColor: 'rgba(255, 255, 255, 0)',
+    wheelSensitivity: 0.0008,
+    wheelDamping: 0.92,
+    momentumThreshold: 0.1,
+    mouseSensitivity: 0.003,
+    touchSensitivity: 0.008,
   };
 
   const projects = [];
@@ -1959,6 +1973,7 @@ function initLabsGrid() {
     const project = {
       id: $item.attr('data-lab-item'),
       title: $item.find('[data-lab-title]').text().trim(),
+      label: $item.find('[data-lab-label]').text().trim(),
       desc: $item.find('[data-lab-desc]').text().trim(),
       image: $item.find('[data-lab-img]').attr('src'),
     };
@@ -2140,7 +2155,7 @@ function initLabsGrid() {
         });
 
         imageTextures.push(texture);
-        textTextures.push(createTextTexture(project.title, project.year));
+        textTextures.push(createTextTexture(project.title, project.label));
       });
     });
   };
@@ -2229,7 +2244,7 @@ function initLabsGrid() {
     e.preventDefault();
   };
 
-  const handleMove = (currentX, currentY) => {
+  const handleMove = (currentX, currentY, isTouch = false) => {
     if (!isDragging || currentX === undefined || currentY === undefined) return;
 
     const deltaX = currentX - previousMouse.x;
@@ -2240,8 +2255,9 @@ function initLabsGrid() {
       if (targetZoom === 1.0) targetZoom = config.zoomLevel;
     }
 
-    targetOffset.x -= deltaX * 0.003;
-    targetOffset.y += deltaY * 0.003;
+    const sensitivity = isTouch ? config.touchSensitivity : config.mouseSensitivity;
+    targetOffset.x -= deltaX * sensitivity;
+    targetOffset.y += deltaY * sensitivity;
     previousMouse.x = currentX;
     previousMouse.y = currentY;
   };
@@ -2249,7 +2265,7 @@ function initLabsGrid() {
   const onPointerMove = (e) => handleMove(e.clientX, e.clientY);
   const onTouchMove = (e) => {
     e.preventDefault();
-    handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    handleMove(e.touches[0].clientX, e.touches[0].clientY, true);
   };
 
   const onPointerUp = (event) => {
@@ -2453,7 +2469,7 @@ function initLabsGrid() {
   const updateTextColors = () => {
     if (!plane?.material?.uniforms?.uTextAtlas) return;
 
-    const newTextTextures = projects.map((p) => createTextTexture(p.title, p.year));
+    const newTextTextures = projects.map((p) => createTextTexture(p.title, p.label));
     const textResult = createTextureAtlas(newTextTextures, true);
 
     const old = plane.material.uniforms.uTextAtlas.value;
@@ -2473,6 +2489,74 @@ function initLabsGrid() {
   const setupEventListeners = () => {
     const container = document.getElementById('gallery');
 
+    let wheelVelocity = { x: 0, y: 0 };
+    let lastWheelTime = 0;
+    let momentumAnimation = null;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+
+      const currentTime = Date.now();
+      const deltaTime = currentTime - lastWheelTime;
+      lastWheelTime = currentTime;
+
+      let { deltaX } = e;
+      let { deltaY } = e;
+
+      if (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) > 0) {
+        if (e.deltaMode === 1) {
+          deltaX *= 16;
+          deltaY *= 16;
+        } else if (e.deltaMode === 2) {
+          deltaX *= 400;
+          deltaY *= 400;
+        }
+
+        const sensitivity = config.wheelSensitivity || 0.0008;
+        const moveX = deltaX * sensitivity;
+        const moveY = deltaY * sensitivity;
+
+        targetOffset.x += moveX;
+        targetOffset.y -= moveY;
+
+        wheelVelocity.x = (moveX / Math.max(deltaTime, 16)) * 1000;
+        wheelVelocity.y = (moveY / Math.max(deltaTime, 16)) * 1000;
+
+        if (momentumAnimation) {
+          cancelAnimationFrame(momentumAnimation);
+          momentumAnimation = null;
+        }
+
+        clearTimeout(container.wheelTimeout);
+        container.wheelTimeout = setTimeout(() => {
+          startMomentum();
+        }, 50);
+      }
+    };
+
+    const startMomentum = () => {
+      const damping = config.wheelDamping || 0.92;
+      const threshold = config.momentumThreshold || 0.1;
+
+      const animateMomentum = () => {
+        wheelVelocity.x *= damping;
+        wheelVelocity.y *= damping;
+
+        if (Math.abs(wheelVelocity.x) > threshold || Math.abs(wheelVelocity.y) > threshold) {
+          targetOffset.x += wheelVelocity.x * 0.016;
+          targetOffset.y -= wheelVelocity.y * 0.016;
+
+          momentumAnimation = requestAnimationFrame(animateMomentum);
+        } else {
+          momentumAnimation = null;
+        }
+      };
+
+      if (Math.abs(wheelVelocity.x) > threshold || Math.abs(wheelVelocity.y) > threshold) {
+        momentumAnimation = requestAnimationFrame(animateMomentum);
+      }
+    };
+
     container.addEventListener('mousedown', onPointerDown);
     container.addEventListener('mousemove', onPointerMove);
     container.addEventListener('mouseup', onPointerUp);
@@ -2482,6 +2566,7 @@ function initLabsGrid() {
     container.addEventListener('touchstart', onTouchStart, passiveOpts);
     container.addEventListener('touchmove', onTouchMove, passiveOpts);
     container.addEventListener('touchend', onPointerUp, passiveOpts);
+    container.addEventListener('wheel', handleWheel, passiveOpts);
 
     window.addEventListener('resize', onWindowResize);
     container.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -2721,6 +2806,7 @@ function initMaskTextReveal(el) {
             trigger: heading[0],
             start: 'clamp(top 80%)',
             once: true,
+            markers: true,
             onEnter: animateText,
           });
 
@@ -2797,6 +2883,7 @@ function initItemReveal(el) {
           trigger: item[0],
           start: 'clamp(top 95%)',
           once: true,
+          markers: true,
           onEnter: animateItem,
         });
 
@@ -2831,33 +2918,40 @@ function initItemReveal(el) {
 }
 
 function initGridReveal() {
-  gsap.fromTo(
-    '.grid-line.is-h',
-    {
-      scaleX: 0,
-    },
-    {
-      scaleX: 1,
-      stagger: 0.1,
-      duration: 6,
-      immediateRender: true,
-      ease: 'power4.out',
-    }
-  );
+  let gridH = $('.grid-line.is-h');
+  let gridV = $('.grid-line.is-v');
 
-  gsap.fromTo(
-    '.grid-line.is-v',
-    {
-      scaleY: 0,
-    },
-    {
-      scaleY: 1,
-      stagger: 0.1,
-      duration: 2,
-      immediateRender: true,
-      ease: 'power4.inOut',
-    }
-  );
+  if (gridH.length) {
+    gsap.fromTo(
+      gridH,
+      {
+        scaleX: 0,
+      },
+      {
+        scaleX: 1,
+        stagger: 0.1,
+        duration: 6,
+        immediateRender: true,
+        ease: 'power4.out',
+      }
+    );
+  }
+
+  if (gridV.length) {
+    gsap.fromTo(
+      gridV,
+      {
+        scaleY: 0,
+      },
+      {
+        scaleY: 1,
+        stagger: 0.1,
+        duration: 2,
+        immediateRender: true,
+        ease: 'power4.inOut',
+      }
+    );
+  }
 }
 
 function initButtonCharacterStagger() {
@@ -3270,7 +3364,6 @@ function initBarba() {
             });
 
             const imgElement = $(clonedElement).find('img');
-            console.log(imgElement);
 
             const tl = gsap.timeline({
               onComplete: () => {
