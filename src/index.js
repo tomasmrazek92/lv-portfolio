@@ -2339,7 +2339,7 @@ function initLabsGrid() {
       $('[data-lab-item]').hide();
 
       const $modal = $(`[data-lab-item="${id}"]`);
-      $modal.show();
+      $modal.css('display', 'flex');
 
       this.handleMediaType($modal);
     },
@@ -2504,6 +2504,8 @@ function initLabsGrid() {
       let { deltaY } = e;
 
       if (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) > 0) {
+        document.body.classList.add('dragging');
+
         if (e.deltaMode === 1) {
           deltaX *= 16;
           deltaY *= 16;
@@ -2529,8 +2531,9 @@ function initLabsGrid() {
 
         clearTimeout(container.wheelTimeout);
         container.wheelTimeout = setTimeout(() => {
+          document.body.classList.remove('dragging');
           startMomentum();
-        }, 50);
+        }, 150);
       }
     };
 
@@ -2549,11 +2552,14 @@ function initLabsGrid() {
           momentumAnimation = requestAnimationFrame(animateMomentum);
         } else {
           momentumAnimation = null;
+          document.body.classList.remove('dragging');
         }
       };
 
       if (Math.abs(wheelVelocity.x) > threshold || Math.abs(wheelVelocity.y) > threshold) {
         momentumAnimation = requestAnimationFrame(animateMomentum);
+      } else {
+        document.body.classList.remove('dragging');
       }
     };
 
