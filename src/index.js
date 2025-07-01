@@ -1429,7 +1429,10 @@ function animateWorkTimeline() {
   // Reinitialize on resize
   $(window).off('resize.workTimeline');
   $(window).on('resize.workTimeline', function () {
-    setTimeout(initializeTimeline, 100);
+    if ($(window).width() !== $(window).data('prevWidth')) {
+      $(window).data('prevWidth', $(window).width());
+      setTimeout(initializeTimeline, 100);
+    }
   });
 }
 
