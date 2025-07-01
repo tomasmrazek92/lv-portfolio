@@ -1042,6 +1042,9 @@ function animateHomepageHero() {
       clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)',
       duration: 1.5,
       ease: 'power3.inOut',
+      onComplete: () => {
+        $(this).css('clip-path', '');
+      },
     });
   });
 }
