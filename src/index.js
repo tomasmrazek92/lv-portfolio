@@ -250,7 +250,7 @@ function initTimeCheck() {
 }
 
 function initCSSMarquee() {
-  const pixelsPerSecond = 75; // Set the marquee speed (pixels per second)
+  const pixelsPerSecond = 60; // Set the marquee speed (pixels per second)
   const marquees = document.querySelectorAll('[data-css-marquee]');
   let activeMarquees = [];
   let resizeTimer;
@@ -782,32 +782,46 @@ function initDynamicCustomTextCursor() {
   let cursorIsOnRight = false;
   let currentTarget = null;
   let lastText = '';
+  let isActive = false;
+  let xTo, yTo;
 
-  // Position cursor relative to actual cursor position on page load
-  gsap.set(cursorItem, { xPercent: xOffset, yPercent: yOffset, scale: 0.8 });
-
-  // Use GSAP quick.to for a more performative tween on the cursor
-  let xTo = gsap.quickTo(cursorItem, 'x', { ease: 'power3' });
-  let yTo = gsap.quickTo(cursorItem, 'y', { ease: 'power3' });
-
-  // Function to get the width of the cursor element including a buffer
-  const getCursorEdgeThreshold = () => {
-    return cursorItem.offsetWidth + 16; // Cursor width + 16px margin
+  const checkScreenSize = () => {
+    return window.innerWidth >= 992;
   };
 
-  // On mousemove, call the quickTo functions to the actual cursor position
-  window.addEventListener('mousemove', (e) => {
+  const initCursor = () => {
+    if (!checkScreenSize()) return;
+
+    isActive = true;
+    gsap.set(cursorItem, { xPercent: xOffset, yPercent: yOffset, scale: 0.8 });
+    xTo = gsap.quickTo(cursorItem, 'x', { ease: 'power3' });
+    yTo = gsap.quickTo(cursorItem, 'y', { ease: 'power3' });
+    cursorItem.style.display = 'block';
+  };
+
+  const destroyCursor = () => {
+    isActive = false;
+    if (cursorItem) {
+      cursorItem.style.display = 'none';
+    }
+  };
+
+  const getCursorEdgeThreshold = () => {
+    return cursorItem.offsetWidth + 16;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isActive) return;
+
     let windowWidth = window.innerWidth;
     let windowHeight = window.innerHeight;
     let { scrollY } = window;
     let cursorX = e.clientX;
-    let cursorY = e.clientY + scrollY; // Adjust cursorY to account for scroll
+    let cursorY = e.clientY + scrollY;
 
-    // Default offsets
     let xPercent = xOffset;
     let yPercent = yOffset;
 
-    // Adjust X offset dynamically based on cursor width
     let cursorEdgeThreshold = getCursorEdgeThreshold();
     if (cursorX > windowWidth - cursorEdgeThreshold) {
       cursorIsOnRight = true;
@@ -816,7 +830,6 @@ function initDynamicCustomTextCursor() {
       cursorIsOnRight = false;
     }
 
-    // Adjust Y offset if in the bottom 10% of the current viewport
     if (cursorY > scrollY + windowHeight * 0.9) {
       yPercent = -120;
     }
@@ -824,11 +837,8 @@ function initDynamicCustomTextCursor() {
     if (currentTarget) {
       let newText = currentTarget.getAttribute('data-cursor');
       if (newText !== lastText) {
-        // Only update if the text is different
         cursorParagraph.innerHTML = newText;
         lastText = newText;
-
-        // Recalculate edge awareness whenever the text changes
         cursorEdgeThreshold = getCursorEdgeThreshold();
       }
     }
@@ -842,32 +852,60 @@ function initDynamicCustomTextCursor() {
     });
     xTo(cursorX);
     yTo(cursorY - scrollY);
+  };
+
+  const handleMouseEnter = (target) => {
+    if (!isActive) return;
+
+    currentTarget = target;
+    let newText = target.getAttribute('data-cursor');
+
+    if (newText !== lastText) {
+      cursorParagraph.innerHTML = newText;
+      lastText = newText;
+      getCursorEdgeThreshold();
+    }
+
+    if (target.tagName !== 'A') {
+      cursorItem.style.backgroundColor = 'var(--text-3)';
+      cursorItem.style.color = 'var(--body-2)';
+    } else {
+      cursorItem.style.backgroundColor = '';
+      cursorItem.style.color = '';
+    }
+  };
+
+  const handleResize = () => {
+    if (checkScreenSize() && !isActive) {
+      initCursor();
+    } else if (!checkScreenSize() && isActive) {
+      destroyCursor();
+    }
+  };
+
+  window.addEventListener('mousemove', handleMouseMove);
+  window.addEventListener('resize', handleResize);
+
+  targets.forEach((target) => {
+    target.addEventListener('mouseenter', () => handleMouseEnter(target));
   });
 
-  // Add a mouse enter listener for each link that has a data-cursor attribute
-  targets.forEach((target) => {
-    target.addEventListener('mouseenter', () => {
-      currentTarget = target; // Set the current target
+  if (checkScreenSize()) {
+    initCursor();
+  }
+}
 
-      let newText = target.getAttribute('data-cursor');
-
-      // Update only if the text changes
-      if (newText !== lastText) {
-        cursorParagraph.innerHTML = newText;
-        lastText = newText;
-
-        // Recalculate edge awareness whenever the text changes
-        let cursorEdgeThreshold = getCursorEdgeThreshold();
-      }
-
-      if (target.tagName !== 'A') {
-        cursorItem.style.backgroundColor = 'var(--text-3)';
-        cursorItem.style.color = 'var(--body-2)';
-      } else {
-        cursorItem.style.backgroundColor = '';
-        cursorItem.style.color = '';
-      }
-    });
+function initFooterGif() {
+  $('.footer-gif-trigger').on('mouseenter click', function () {
+    $('.footer_gif').css('height', 'auto');
+    let autoHeight = $('.footer_gif').height();
+    $('.footer_gif').css('height', '0');
+    $('.footer_gif').animate(
+      {
+        height: autoHeight,
+      },
+      300
+    );
   });
 }
 
@@ -1519,6 +1557,9 @@ function initWhySwipers() {
     },
     loop: true,
     speed: 200,
+    navigation: {
+      nextEl: '.why-hero_quotes-slide-inner',
+    },
     pagination: {
       el: '.swiper-nav.cc-quotes',
       bulletClass: 'swiper-dot',
@@ -2859,6 +2900,7 @@ function initSiteFunctionality() {
   });
   window.initDarkModeToggle();
   VideoModal.init();
+  initFooterGif();
 }
 
 // Pages
@@ -2930,7 +2972,6 @@ function runInitFunctions(data) {
   } else if (namespace === 'contact') {
     initContact();
   } else if (namespace === 'labs') {
-    console.log('labs');
     initLabs();
   }
 
