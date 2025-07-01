@@ -2812,7 +2812,6 @@ function initMaskTextReveal(el) {
             trigger: heading[0],
             start: 'clamp(top 80%)',
             once: true,
-            markers: true,
             onEnter: animateText,
           });
 
@@ -2889,7 +2888,6 @@ function initItemReveal(el) {
           trigger: item[0],
           start: 'clamp(top 95%)',
           once: true,
-          markers: true,
           onEnter: animateItem,
         });
 
