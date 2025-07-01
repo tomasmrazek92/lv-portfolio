@@ -1328,7 +1328,7 @@ function animateWorkTimeline() {
         const firstItemTop = firstItem.offset().top;
         const firstItemHeight = firstItem.outerHeight();
         const firstItemCenter = firstItemTop - firstItemHeight / 2;
-        return 0 + 'px center';
+        return firstItemCenter + 'px center';
       },
       end: () => {
         const listHeight = list.outerHeight();
@@ -1398,6 +1398,7 @@ function animateWorkTimeline() {
           gsap.set(timelineInner, { y: -translateY, x: 0 });
         }
       },
+      markers: true,
     });
 
     $(document).off('click.workTimeline', '.work-d_hero-timeline_item');
