@@ -1311,9 +1311,10 @@ function animateWorkTimeline() {
         }
       },
       start: () => {
-        const firstItemTop = firstItem.offset().top;
         const firstItemHeight = firstItem.outerHeight();
-        const firstItemCenter = firstItemTop - firstItemHeight / 2;
+        const firstItemCenter = firstItemHeight / 2;
+        console.log(firstItemHeight);
+        console.log(firstItemCenter);
         return firstItemCenter + 'px center';
       },
       end: () => {
@@ -1322,6 +1323,7 @@ function animateWorkTimeline() {
         const lastItemCenter = listHeight - lastItemHeight / 2;
         return lastItemCenter + 'px center';
       },
+      markers: true,
       scrub: 0,
       onUpdate: (self) => {
         const isSmallScreen = $(window).width() < 992;
@@ -2512,6 +2514,8 @@ function initLabsGrid() {
   const setupEventListeners = () => {
     const container = document.getElementById('gallery');
 
+    if (!container) return;
+
     let wheelVelocity = { x: 0, y: 0 };
     let lastWheelTime = 0;
     let momentumAnimation = null;
@@ -3462,6 +3466,7 @@ function initBarba() {
       },
 
       afterEnter(data) {
+        resetWebflow(data);
         pauseScroll(false);
         animateCloneToTarget(data.next.container);
       },
