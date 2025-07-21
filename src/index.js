@@ -639,6 +639,7 @@ const VideoModal = {
           this.modalPlayer.restart();
           this.modalPlayer.muted = false;
           this.modalPlayer.play().catch(() => {});
+          this.fullscreen.iosNative = true;
         }, 100);
       });
     }
