@@ -547,6 +547,35 @@ const VideoModal = {
   open($element) {
     if (this.isOpen) return;
 
+    const isMobile = window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      const playerInstance = this.originalPlayers.find(
+        (p) => p.elements.container === $element[0] || $(p.elements.container).is($element)
+      );
+
+      const nativeVideo = playerInstance?.elements?.video;
+
+      if (nativeVideo) {
+        nativeVideo.removeAttribute('playsinline');
+        nativeVideo.removeAttribute('webkit-playsinline');
+        nativeVideo.muted = false;
+        nativeVideo.play().catch(() => {});
+
+        const requestFullscreen =
+          nativeVideo.requestFullscreen ||
+          nativeVideo.webkitEnterFullscreen ||
+          nativeVideo.webkitRequestFullscreen ||
+          nativeVideo.msRequestFullscreen;
+
+        if (requestFullscreen) {
+          requestFullscreen.call(nativeVideo);
+        }
+      }
+
+      return; // Skip modal
+    }
+
     this.$originalElement = $element;
     this.originalMaxWidth = $element.css('max-width');
 
@@ -634,7 +663,6 @@ const VideoModal = {
           this.modalPlayer.restart();
           this.modalPlayer.muted = false;
           this.modalPlayer.play().catch(() => {});
-          this.fullscreen.iosNative = true;
         }, 100);
       });
     }
