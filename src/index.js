@@ -631,7 +631,6 @@ const VideoModal = {
         muted: false,
         autoplay: false,
         loop: { active: true },
-        playsinline: false,
       });
 
       this.modalPlayer.on('ready', () => {
