@@ -569,6 +569,40 @@ const VideoModal = {
 
             if (requestFullscreen) {
               requestFullscreen.call($video);
+              // Handle fullscreen exit
+              const onFullscreenExit = () => {
+                // Re-add playsinline
+                $video.setAttribute('playsinline', '');
+                $video.setAttribute('webkit-playsinline', '');
+
+                // Reload Plyr instance
+                const $container = $element.closest('[data-video-player]');
+                const newPlayer = new Plyr($video, {
+                  controls: ['play', 'progress', 'mute', 'fullscreen'],
+                  muted: true,
+                  autoplay: true,
+                  loop: { active: true },
+                });
+
+                // Hide controls again
+                $($container).find('.plyr__controls').hide();
+
+                newPlayer.on('ready', () => {
+                  newPlayer.play().catch(() => {});
+                });
+
+                // Clean up listener
+                $video.removeEventListener('webkitendfullscreen', onFullscreenExit);
+                $video.removeEventListener('fullscreenchange', onFullscreenExit);
+              };
+
+              // Add listeners
+              $video.addEventListener('webkitendfullscreen', onFullscreenExit); // iOS
+              $video.addEventListener('fullscreenchange', () => {
+                if (!document.fullscreenElement) {
+                  onFullscreenExit();
+                }
+              });
             }
           })
           .catch((err) => {
