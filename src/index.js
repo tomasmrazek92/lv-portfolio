@@ -621,10 +621,6 @@ const VideoModal = {
     const $clonedElement = this.$videoWrapper.find('[data-video-player]');
     const $videoEl = $clonedElement.find('.plyr_video');
 
-    $videoEl.removeAttr('playsinline');
-
-    console.log('clone');
-
     if ($videoEl.length) {
       this.modalPlayer = new Plyr($videoEl[0], {
         controls: ['play', 'progress', 'mute', 'fullscreen'],
