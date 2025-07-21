@@ -550,32 +550,36 @@ const VideoModal = {
     const isMobile = window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
 
     if (isMobile) {
-      const playerInstance = this.originalPlayers.find(
-        (p) => p.elements.container === $element[0] || $(p.elements.container).is($element)
-      );
+      const $video = $element.find('video')[0];
 
-      const nativeVideo = playerInstance?.elements?.video;
+      if ($video) {
+        $video.removeAttribute('playsinline');
+        $video.removeAttribute('webkit-playsinline');
+        $video.muted = false;
 
-      if (nativeVideo) {
-        nativeVideo.removeAttribute('playsinline');
-        nativeVideo.removeAttribute('webkit-playsinline');
-        nativeVideo.muted = false;
-        nativeVideo.play().catch(() => {});
+        // Ensure video plays on user interaction
+        $video
+          .play()
+          .then(() => {
+            const requestFullscreen =
+              $video.requestFullscreen ||
+              $video.webkitEnterFullscreen ||
+              $video.webkitRequestFullscreen ||
+              $video.msRequestFullscreen;
 
-        const requestFullscreen =
-          nativeVideo.requestFullscreen ||
-          nativeVideo.webkitEnterFullscreen ||
-          nativeVideo.webkitRequestFullscreen ||
-          nativeVideo.msRequestFullscreen;
-
-        if (requestFullscreen) {
-          requestFullscreen.call(nativeVideo);
-        }
+            if (requestFullscreen) {
+              requestFullscreen.call($video);
+            }
+          })
+          .catch((err) => {
+            console.warn('Autoplay failed:', err);
+          });
       }
 
-      return; // Skip modal
+      return;
     }
 
+    // Continue modal logic for non-mobile
     this.$originalElement = $element;
     this.originalMaxWidth = $element.css('max-width');
 
