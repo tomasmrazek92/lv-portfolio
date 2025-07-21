@@ -553,11 +553,52 @@ const VideoModal = {
       const $video = $element.find('video')[0];
 
       if ($video) {
+        // Reset video state
         $video.removeAttribute('playsinline');
         $video.removeAttribute('webkit-playsinline');
+        $video.controls = false;
+        $video.currentTime = 0; // Restart
         $video.muted = false;
 
-        // Ensure video plays on user interaction
+        // Handle fullscreen exit
+        const handleFullscreenExit = () => {
+          // Clean up listeners
+          $video.removeEventListener('webkitendfullscreen', handleFullscreenExit);
+          $video.removeEventListener('fullscreenchange', handleFullscreenExit);
+
+          // Pause and reset video
+          $video.pause();
+          $video.setAttribute('playsinline', '');
+          $video.setAttribute('webkit-playsinline', '');
+          $video.controls = false;
+
+          // Replace video element to fully reset
+          const $container = $element.closest('[data-video-player]');
+          const $newVideo = $($video).clone(true)[0];
+          $video.replaceWith($newVideo);
+
+          // Reinitialize Plyr
+          const newPlayer = new Plyr($newVideo, {
+            controls: ['play', 'progress', 'mute', 'fullscreen'],
+            muted: true,
+            autoplay: true,
+            loop: { active: true },
+          });
+
+          $($container).find('.plyr__controls').hide();
+
+          newPlayer.on('ready', () => {
+            newPlayer.play().catch(() => {});
+          });
+        };
+
+        // Add fullscreen exit listeners
+        $video.addEventListener('webkitendfullscreen', handleFullscreenExit);
+        $video.addEventListener('fullscreenchange', () => {
+          if (!document.fullscreenElement) handleFullscreenExit();
+        });
+
+        // Play and fullscreen
         $video
           .play()
           .then(() => {
@@ -569,51 +610,17 @@ const VideoModal = {
 
             if (requestFullscreen) {
               requestFullscreen.call($video);
-              // Handle fullscreen exit
-              const onFullscreenExit = () => {
-                // Re-add playsinline
-                $video.setAttribute('playsinline', '');
-                $video.setAttribute('webkit-playsinline', '');
-
-                // Reload Plyr instance
-                const $container = $element.closest('[data-video-player]');
-                const newPlayer = new Plyr($video, {
-                  controls: ['play', 'progress', 'mute', 'fullscreen'],
-                  muted: true,
-                  autoplay: true,
-                  loop: { active: true },
-                });
-
-                // Hide controls again
-                $($container).find('.plyr__controls').hide();
-
-                newPlayer.on('ready', () => {
-                  newPlayer.play().catch(() => {});
-                });
-
-                // Clean up listener
-                $video.removeEventListener('webkitendfullscreen', onFullscreenExit);
-                $video.removeEventListener('fullscreenchange', onFullscreenExit);
-              };
-
-              // Add listeners
-              $video.addEventListener('webkitendfullscreen', onFullscreenExit); // iOS
-              $video.addEventListener('fullscreenchange', () => {
-                if (!document.fullscreenElement) {
-                  onFullscreenExit();
-                }
-              });
             }
           })
           .catch((err) => {
-            console.warn('Autoplay failed:', err);
+            console.warn('Autoplay or fullscreen failed:', err);
           });
       }
 
       return;
     }
 
-    // Continue modal logic for non-mobile
+    // Non-mobile modal logic...
     this.$originalElement = $element;
     this.originalMaxWidth = $element.css('max-width');
 
