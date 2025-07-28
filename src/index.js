@@ -2822,7 +2822,7 @@ function initMaskTextReveal(el) {
   let splitInstances = [];
   let scrollTriggerInstances = [];
 
-  function setupSplitText() {
+  function cleanupInstance() {
     scrollTriggerInstances.forEach((trigger) => {
       if (trigger) trigger.kill();
     });
@@ -2836,7 +2836,36 @@ function initMaskTextReveal(el) {
 
     $(el).each(function () {
       const heading = $(this);
-      if (heading.hasClass('animated')) return;
+      const originalText = heading.data('original-text');
+      if (originalText) {
+        heading.html(originalText);
+      }
+      heading.removeClass('animated');
+      gsap.set(heading, { clearProps: 'all' });
+      if (heading.closest('li').length > 0) {
+        gsap.set(heading.closest('li'), { clearProps: 'all' });
+      }
+    });
+  }
+
+  function setupSplitText() {
+    $(el).each(function () {
+      const heading = $(this);
+
+      if (heading.hasClass('split-initialized')) {
+        return;
+      }
+
+      heading.addClass('split-initialized');
+      heading.removeClass('animated');
+
+      const originalText = heading.data('original-text') || heading.text();
+      heading.data('original-text', originalText);
+
+      if (heading.find('.line, .word, .letter').length > 0) {
+        heading.html(originalText);
+      }
+
       const type = heading.data('split-reveal') || 'lines';
       const typesToSplit =
         type === 'lines'
@@ -2847,7 +2876,11 @@ function initMaskTextReveal(el) {
 
       const isInsideLi = heading.closest('li').length > 0;
 
-      gsap.set(heading, { visibility: 'visible', opacity: 1 });
+      gsap.set(heading, {
+        visibility: 'visible',
+        opacity: 1,
+        clearProps: 'transform',
+      });
 
       if (isInsideLi) {
         gsap.set(heading.closest('li'), { opacity: 0 });
@@ -2943,11 +2976,10 @@ function initMaskTextReveal(el) {
 
   return function cleanup() {
     $(window).off('resize', debouncedResize);
-    scrollTriggerInstances.forEach((trigger) => {
-      if (trigger) trigger.kill();
-    });
-    splitInstances.forEach((split) => {
-      if (split) split.revert();
+    cleanupInstance();
+
+    $(el).each(function () {
+      $(this).removeClass('split-initialized');
     });
   };
 }
