@@ -472,8 +472,13 @@ function initClipboardCopy() {
 }
 
 function resetWebflow(data) {
-  // reset webflow interactions
-  window.Webflow && window.Webflow.destroy();
+  let dataWF = new DOMParser()
+    .parseFromString(data.next.html, 'text/html')
+    .querySelector('html')
+    .getAttribute('data-wf-page');
+  document.documentElement.setAttribute('data-wf-page', dataWF),
+    // reset webflow interactions
+    window.Webflow && window.Webflow.destroy();
   window.Webflow && window.Webflow.ready();
   window.Webflow &&
     window.Webflow.require &&
@@ -856,6 +861,8 @@ const VideoModal = {
 
 function initDynamicCustomTextCursor() {
   let cursorItem = document.querySelector('.cursor');
+  if (!cursorItem) return;
+
   let cursorParagraph = cursorItem.querySelector('p');
   let targets = document.querySelectorAll('[data-cursor]');
   let xOffset = 6;
@@ -904,6 +911,7 @@ function initDynamicCustomTextCursor() {
     let yPercent = yOffset;
 
     let cursorEdgeThreshold = getCursorEdgeThreshold();
+
     if (cursorX > windowWidth - cursorEdgeThreshold) {
       cursorIsOnRight = true;
       xPercent = -100;
@@ -1097,6 +1105,7 @@ function animateHomepageHero() {
       { opacity: 0, xPercent: -5 },
       { opacity: 1, xPercent: 0, stagger: 0.2 }
     );
+    tl.fromTo($(this).find('data-item-reveal'), { opacity: 0 }, { opacity: 1 });
   });
 
   $('.hp-hero_content-visual').each(function () {
@@ -1387,8 +1396,6 @@ function animateWorkTimeline() {
       start: () => {
         const firstItemHeight = firstItem.outerHeight();
         const firstItemCenter = firstItemHeight / 2;
-        console.log(firstItemHeight);
-        console.log(firstItemCenter);
         return firstItemCenter + 'px center';
       },
       end: () => {
@@ -2515,9 +2522,7 @@ function initLabsGrid() {
           this.activePlayer.pause();
           this.activePlayer.currentTime = 0;
           this.activePlayer.destroy();
-        } catch (e) {
-          console.log('Error destroying player:', e);
-        }
+        } catch (e) {}
         this.activePlayer = null;
       }
 
@@ -3339,6 +3344,7 @@ function initBarba() {
 
       async after(data) {
         pauseScroll(false);
+        initDynamicCustomTextCursor();
         document.documentElement.classList.remove('is-animating');
         handleAnchorScroll();
         if (data.next.namespace === 'labs') {
