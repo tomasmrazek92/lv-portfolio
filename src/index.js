@@ -1105,7 +1105,11 @@ function animateHomepageHero() {
       { opacity: 0, xPercent: -5 },
       { opacity: 1, xPercent: 0, stagger: 0.2 }
     );
-    tl.fromTo($(this).find('data-item-reveal'), { opacity: 0 }, { opacity: 1 });
+    tl.fromTo(
+      $(this).find('data-item-reveal'),
+      { opacity: 0, visibility: 'hidden' },
+      { opacity: 1, visibility: 'visible' }
+    );
   });
 
   $('.hp-hero_content-visual').each(function () {
