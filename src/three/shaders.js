@@ -47,7 +47,7 @@ export const fragmentShader = `
     
     bool isHovered = (cellId.x == uHoveredCell.x && cellId.y == uHoveredCell.y && uHoverIntensity > 0.01);
     
-    float cellIndex = cellId.x + cellId.y * 3.0;
+    float cellIndex = cellId.x + cellId.y * 11.0;
     float texIndex = mod(cellIndex, uTextureCount);
     
     vec3 color = vec3(0.0);

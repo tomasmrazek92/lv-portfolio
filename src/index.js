@@ -1,4 +1,8 @@
-import * as THREE from 'three';
+if (typeof THREE === 'undefined') {
+  import('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js').then(() => {
+    initLabsGrid();
+  });
+}
 
 import { fragmentShader, vertexShader } from './three/shaders.js';
 
@@ -1106,7 +1110,7 @@ function animateHomepageHero() {
       { opacity: 1, xPercent: 0, stagger: 0.2 }
     );
     tl.fromTo(
-      $(this).find('data-item-reveal'),
+      $('.hp-hero').find('[data-item-reveal]'),
       { opacity: 0, visibility: 'hidden' },
       { opacity: 1, visibility: 'visible' }
     );
@@ -2054,6 +2058,7 @@ function initLabsGrid() {
       label: $item.find('[data-lab-label]').text().trim(),
       desc: $item.find('[data-lab-desc]').text().trim(),
       image: $item.find('[data-lab-img]').attr('src'),
+      imageHiRes: $item.find('[data-lab-hires-img]').attr('src'),
     };
 
     projects.push(project);
@@ -2105,12 +2110,12 @@ function initLabsGrid() {
 
   const createTextTexture = (title, year) => {
     const canvas = document.createElement('canvas');
-    canvas.width = 2048;
+    canvas.width = 512;
     canvas.height = 512;
     const ctx = canvas.getContext('2d');
 
-    ctx.clearRect(0, 0, 2048, 512);
-    ctx.font = '60px Arial';
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.font = '100px Arial';
     ctx.fillStyle = getComputedTextColor();
     ctx.textBaseline = 'top';
 
@@ -2133,13 +2138,13 @@ function initLabsGrid() {
       return lines;
     };
 
-    const titleLines = wrapText(title, 1800);
+    const titleLines = wrapText(title, 400);
     titleLines.forEach((line, index) => {
-      ctx.fillText(line, 50, 50 + index * 70);
+      ctx.fillText(line, 25, 25 + index * 35); // Reduced spacing and margin
     });
 
-    ctx.fillStyle = '#999999';
-    ctx.fillText(year, 50, 50 + titleLines.length * 70 + 20);
+    ctx.fillStyle = 'red';
+    ctx.fillText(year, 25, 25 + titleLines.length * 35 + 10);
 
     const texture = new THREE.CanvasTexture(canvas);
     Object.assign(texture, {
@@ -2157,21 +2162,14 @@ function initLabsGrid() {
 
   const createTextureAtlas = (textures, isText = false) => {
     const textureCount = textures.length;
-    const atlasWidth = textureCount;
+    const atlasWidth = textureCount; // Back to 1D
     const atlasHeight = 1;
 
-    const textureSize = 512;
+    const textureSize = isText ? 512 : 512; // Smaller text size
     const canvas = document.createElement('canvas');
     canvas.width = atlasWidth * textureSize;
     canvas.height = atlasHeight * textureSize;
     const ctx = canvas.getContext('2d');
-
-    if (isText) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    } else {
-      ctx.fillStyle = 'black';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
 
     textures.forEach((texture, index) => {
       const x = (index % atlasWidth) * textureSize;
@@ -2239,7 +2237,7 @@ function initLabsGrid() {
   };
 
   const getProjectAtCell = (cellX, cellY) => {
-    const texIndex = Math.floor((cellX + cellY * 3.0) % projects.length);
+    const texIndex = Math.floor((cellX + cellY * 11.0) % projects.length);
     const actualIndex = texIndex < 0 ? projects.length + texIndex : texIndex;
     return projects[actualIndex];
   };
@@ -2368,7 +2366,7 @@ function initLabsGrid() {
         let worldX = screenX * distortion * (rect.width / rect.height) * zoomLevel + offset.x;
         let worldY = screenY * distortion * zoomLevel + offset.y;
 
-        const cellX = Math.floor((worldX / config.cellSize) * 0.88);
+        const cellX = Math.floor((worldX / config.cellSize) * 0.95);
         const cellY = Math.floor((worldY / config.cellSize) * 0.95);
 
         const clickedProject = getProjectAtCell(cellX, cellY);
@@ -2594,17 +2592,25 @@ function initLabsGrid() {
     renderer.render(scene, camera);
   };
 
+  let wheelVelocity = { x: 0, y: 0 };
+  let lastWheelTime = 0;
+  let momentumAnimation = null;
+
   const setupEventListeners = () => {
     const container = document.getElementById('gallery');
 
     if (!container) return;
 
-    let wheelVelocity = { x: 0, y: 0 };
-    let lastWheelTime = 0;
-    let momentumAnimation = null;
-
+    let wheelTimeout = null;
     const handleWheel = (e) => {
       e.preventDefault();
+
+      // Throttle wheel events
+      if (wheelTimeout) return;
+
+      wheelTimeout = setTimeout(() => {
+        wheelTimeout = null;
+      }, 16); // ~60fps throttling
 
       const currentTime = Date.now();
       const deltaTime = currentTime - lastWheelTime;
@@ -2631,45 +2637,14 @@ function initLabsGrid() {
         targetOffset.x += moveX;
         targetOffset.y -= moveY;
 
-        wheelVelocity.x = (moveX / Math.max(deltaTime, 16)) * 1000;
-        wheelVelocity.y = (moveY / Math.max(deltaTime, 16)) * 1000;
-
-        if (momentumAnimation) {
-          cancelAnimationFrame(momentumAnimation);
-          momentumAnimation = null;
-        }
+        // Keep existing momentum code but with capped velocity
+        wheelVelocity.x = Math.max(-2, Math.min(2, (moveX / Math.max(deltaTime, 16)) * 1000));
+        wheelVelocity.y = Math.max(-2, Math.min(2, (moveY / Math.max(deltaTime, 16)) * 1000));
 
         clearTimeout(container.wheelTimeout);
         container.wheelTimeout = setTimeout(() => {
           document.body.classList.remove('dragging');
-          startMomentum();
         }, 150);
-      }
-    };
-
-    const startMomentum = () => {
-      const damping = config.wheelDamping || 0.92;
-      const threshold = config.momentumThreshold || 0.1;
-
-      const animateMomentum = () => {
-        wheelVelocity.x *= damping;
-        wheelVelocity.y *= damping;
-
-        if (Math.abs(wheelVelocity.x) > threshold || Math.abs(wheelVelocity.y) > threshold) {
-          targetOffset.x += wheelVelocity.x * 0.016;
-          targetOffset.y -= wheelVelocity.y * 0.016;
-
-          momentumAnimation = requestAnimationFrame(animateMomentum);
-        } else {
-          momentumAnimation = null;
-          document.body.classList.remove('dragging');
-        }
-      };
-
-      if (Math.abs(wheelVelocity.x) > threshold || Math.abs(wheelVelocity.y) > threshold) {
-        momentumAnimation = requestAnimationFrame(animateMomentum);
-      } else {
-        document.body.classList.remove('dragging');
       }
     };
 
@@ -2700,6 +2675,15 @@ function initLabsGrid() {
 
   const animate = () => {
     requestAnimationFrame(animate);
+
+    // Handle momentum decay in main loop
+    if (Math.abs(wheelVelocity.x) > 0.01 || Math.abs(wheelVelocity.y) > 0.01) {
+      targetOffset.x += wheelVelocity.x * 0.016;
+      targetOffset.y -= wheelVelocity.y * 0.016;
+
+      wheelVelocity.x *= 0.92; // Damping
+      wheelVelocity.y *= 0.92;
+    }
 
     offset.x += (targetOffset.x - offset.x) * config.lerpFactor;
     offset.y += (targetOffset.y - offset.y) * config.lerpFactor;
@@ -2762,6 +2746,7 @@ function initLabsGrid() {
     const imageTextures = await loadTextures();
 
     const imageResult = createTextureAtlas(imageTextures, false);
+    console.log(textTextures);
     const textResult = createTextureAtlas(textTextures, true);
 
     const uniforms = {
