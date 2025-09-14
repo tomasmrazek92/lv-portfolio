@@ -1339,8 +1339,81 @@ function animateWorkLoad() {
   );
 }
 
+function waitForImagesAndLayout() {
+  return new Promise((resolve) => {
+    const items = $('.work-d_hero-list-item');
+    if (!items.length) {
+      resolve();
+      return;
+    }
+
+    const images = items.find('img');
+    let loadedImages = 0;
+    const totalImages = images.length;
+
+    if (totalImages === 0) {
+      setTimeout(resolve, 100);
+      return;
+    }
+
+    function checkComplete() {
+      loadedImages++;
+      if (loadedImages >= totalImages) {
+        setTimeout(resolve, 100);
+      }
+    }
+
+    images.each(function () {
+      if (this.complete) {
+        checkComplete();
+      } else {
+        $(this).on('load error', checkComplete);
+      }
+    });
+
+    setTimeout(resolve, 2000);
+  });
+}
+
+let timelineGlobalState = {
+  isInitialized: false,
+  scrollTriggerInstance: null,
+  rafId: null,
+  lastTransformValue: -1,
+  lastUpdateTime: 0,
+  cachedData: {},
+};
 function animateWorkTimeline() {
   let scrollTriggerInstance;
+  let cachedData = {};
+  let lastUpdateTime = 0;
+  const updateThreshold = 16;
+
+  function cacheItemPositions() {
+    const items = $('.work-d_hero-list-item');
+    const timelineItems = $('.work-d_hero-timeline_item');
+    const isSmallScreen = $(window).width() < 992;
+
+    cachedData = {
+      items: items,
+      timelineItems: timelineItems,
+      isSmallScreen: isSmallScreen,
+      itemData: [],
+      timelineItemSize: isSmallScreen
+        ? timelineItems.first().outerWidth(true)
+        : timelineItems.first().outerHeight(true),
+    };
+
+    items.each(function (index) {
+      const $item = $(this);
+      const offset = $item.offset();
+      cachedData.itemData.push({
+        top: offset.top,
+        height: $item.outerHeight(),
+        center: offset.top + $item.outerHeight() / 2,
+      });
+    });
+  }
 
   function initializeTimeline() {
     if (scrollTriggerInstance) {
@@ -1360,7 +1433,14 @@ function animateWorkTimeline() {
     const timelineItems = $('.work-d_hero-timeline_item');
     const isSmallScreen = $(window).width() < 992;
 
-    gsap.set(timelineInner, { y: 0, x: 0 });
+    cacheItemPositions();
+
+    gsap.set(timelineInner, {
+      y: 0,
+      x: 0,
+      force3D: true,
+      willChange: 'transform',
+    });
 
     let itemsTl = gsap.timeline({ paused: true });
 
@@ -1412,67 +1492,55 @@ function animateWorkTimeline() {
         const lastItemCenter = listHeight - lastItemHeight / 2;
         return lastItemCenter + 'px center';
       },
-      markers: true,
       scrub: 0,
       onUpdate: (self) => {
-        const isSmallScreen = $(window).width() < 992;
+        const now = performance.now();
+        if (now - lastUpdateTime < updateThreshold) return;
+        lastUpdateTime = now;
 
         const windowHeight = $(window).height();
         const windowScrollTop = $(window).scrollTop();
         const viewportCenter = windowScrollTop + windowHeight / 2;
 
-        const firstItemTop = firstItem.offset().top;
-        const firstItemHeight = firstItem.outerHeight();
-        const firstItemCenter = firstItemTop + firstItemHeight / 2;
+        if (!cachedData.itemData.length) return;
+
+        const firstItemCenter = cachedData.itemData[0].center;
 
         if (viewportCenter < firstItemCenter) {
           gsap.set(timelineInner, { y: 0, x: 0 });
-          timelineItems.removeClass('active');
-          timelineItems.eq(0).addClass('active');
+          cachedData.timelineItems.removeClass('active');
+          cachedData.timelineItems.eq(0).addClass('active');
           return;
         }
 
         let imageProgress = 0;
+        let currentImageIndex = -1;
 
-        items.each(function (index) {
-          const $item = $(this);
-          const itemTop = $item.offset().top;
-          const itemHeight = $item.outerHeight();
-          const itemCenter = itemTop + itemHeight / 2;
-
-          if (viewportCenter < itemCenter) {
-            return false;
-          }
-          imageProgress += 1;
-        });
-
-        imageProgress = Math.max(0, imageProgress - 1);
-
-        const currentImageIndex = imageProgress;
-        if (currentImageIndex < items.length - 1) {
-          const currentItem = items.eq(currentImageIndex);
-          const nextItem = items.eq(currentImageIndex + 1);
-
-          if (currentItem.length && nextItem.length) {
-            const currentCenter = currentItem.offset().top + currentItem.outerHeight() / 2;
-            const nextCenter = nextItem.offset().top + nextItem.outerHeight() / 2;
-
-            if (viewportCenter > currentCenter) {
-              const progressToNext =
-                (viewportCenter - currentCenter) / (nextCenter - currentCenter);
-              imageProgress += Math.min(1, Math.max(0, progressToNext));
-            }
+        for (let i = 0; i < cachedData.itemData.length; i++) {
+          if (viewportCenter >= cachedData.itemData[i].center) {
+            imageProgress = i;
+            currentImageIndex = i;
+          } else {
+            break;
           }
         }
 
-        if (isSmallScreen) {
-          const currentItemWidth = timelineItems.first().outerWidth(true);
-          const translateX = imageProgress * currentItemWidth;
-          gsap.set(timelineInner, { x: -translateX, y: 0 });
+        if (currentImageIndex < cachedData.itemData.length - 1 && currentImageIndex >= 0) {
+          const currentCenter = cachedData.itemData[currentImageIndex].center;
+          const nextCenter = cachedData.itemData[currentImageIndex + 1].center;
+
+          if (viewportCenter > currentCenter) {
+            const progressToNext = (viewportCenter - currentCenter) / (nextCenter - currentCenter);
+            imageProgress += Math.min(1, Math.max(0, progressToNext));
+          }
+        }
+
+        const translateValue = imageProgress * cachedData.timelineItemSize;
+
+        if (cachedData.isSmallScreen) {
+          gsap.set(timelineInner, { x: -translateValue, y: 0 });
         } else {
-          const currentItemHeight = timelineItems.first().outerHeight(true);
-          const translateY = imageProgress * currentItemHeight;
-          gsap.set(timelineInner, { y: -translateY, x: 0 });
+          gsap.set(timelineInner, { y: -translateValue, x: 0 });
         }
       },
     });
@@ -1500,17 +1568,60 @@ function animateWorkTimeline() {
     });
   }
 
-  // Initialize on load
-  initializeTimeline();
+  let resizeTimer;
+  function handleResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if ($(window).width() !== $(window).data('prevWidth')) {
+        $(window).data('prevWidth', $(window).width());
+        timelineGlobalState.isInitialized = false;
+        setTimeout(() => {
+          waitForImagesAndLayout().then(() => {
+            initializeTimeline();
+          });
+        }, 100);
+      }
+    }, 150);
+  }
 
-  // Reinitialize on resize
-  $(window).off('resize.workTimeline');
-  $(window).on('resize.workTimeline', function () {
-    if ($(window).width() !== $(window).data('prevWidth')) {
-      $(window).data('prevWidth', $(window).width());
-      setTimeout(initializeTimeline, 100);
+  function cleanup() {
+    if (timelineGlobalState.scrollTriggerInstance) {
+      timelineGlobalState.scrollTriggerInstance.kill();
+      timelineGlobalState.scrollTriggerInstance = null;
     }
+    if (timelineGlobalState.rafId) {
+      cancelAnimationFrame(timelineGlobalState.rafId);
+      timelineGlobalState.rafId = null;
+    }
+    $(window).off('resize.workTimeline');
+    $(document).off('click.workTimeline');
+    timelineGlobalState.isInitialized = false;
+    timelineGlobalState.lastTransformValue = -1;
+    timelineGlobalState.cachedData = {};
+  }
+
+  waitForImagesAndLayout().then(() => {
+    initializeTimeline();
   });
+
+  $(window).off('resize.workTimeline');
+  $(window).on('resize.workTimeline', handleResize);
+
+  if (typeof window.barba !== 'undefined') {
+    window.barba.hooks.before(() => {
+      cleanup();
+    });
+  }
+
+  return {
+    destroy: cleanup,
+    refresh: () => {
+      cleanup();
+      waitForImagesAndLayout().then(() => {
+        initializeTimeline();
+      });
+    },
+  };
 }
 
 function animateWorkIcon() {
@@ -3139,10 +3250,17 @@ function initHomepage() {
   initDynamicCustomTextCursor();
   initWorkCounter();
 }
+let workTimelineInstance;
 function initWork() {
-  animateWorkTimeline();
-  animateWorkLoad();
-  animateWorkIcon();
+  if (workTimelineInstance) {
+    workTimelineInstance.destroy();
+  }
+
+  setTimeout(() => {
+    workTimelineInstance = animateWorkTimeline();
+    animateWorkLoad();
+    animateWorkIcon();
+  }, 100);
 }
 function initAbout() {
   setTimeout(() => {
@@ -3178,15 +3296,12 @@ $(document).ready(function () {
 });
 
 function runInitFunctions(data) {
-  // Always run global functionality
   initSiteFunctionality();
 
-  // Check for page functionality
   const namespace =
     data?.next?.container?.dataset?.barbaNamespace ||
     $('[data-barba="container"]').data('barba-namespace');
 
-  // Run page-specific code
   if (namespace === 'home') {
     initHomepage();
   } else if (namespace === 'work') {
@@ -3201,7 +3316,6 @@ function runInitFunctions(data) {
     initLabs();
   }
 
-  // Add transition styles
   setTimeout(() => {
     gsap.to('[data-barba=container]', { opacity: 1 });
   }, 300);
@@ -3311,6 +3425,12 @@ function initBarba() {
             gsap.set(data.next.container, {
               opacity: 1,
             });
+
+            if (data.next.namespace === 'work' && workTimelineInstance) {
+              setTimeout(() => {
+                workTimelineInstance.refresh();
+              }, 200);
+            }
           },
         },
         '<'
@@ -3324,6 +3444,10 @@ function initBarba() {
 
       before(data) {
         document.documentElement.classList.add('is-animating');
+
+        if (workTimelineInstance) {
+          workTimelineInstance.destroy();
+        }
       },
 
       async enter(data) {
@@ -3373,192 +3497,31 @@ function initBarba() {
   }
 
   function createWorkItemTransition() {
-    function cloneWorkItem(trigger) {
-      const clickedItem = $(trigger).closest('.work_slider-item').find('.work_slider-item_visual');
-
-      if (clickedItem.length) {
-        // Store position and size data
-        const rect = clickedItem[0].getBoundingClientRect();
-        const styles = window.getComputedStyle(clickedItem[0]);
-
-        // Store data for later use
-        clickedItemData = {
-          rect,
-          backgroundColor: styles.backgroundColor,
-          borderRadius: styles.borderRadius || '0px',
-        };
-
-        // Create clone element
-        clonedElement = document.createElement('div');
-        clonedElement.className = 'work-item-clone';
-
-        // Find the image element in the clicked item
-        const imgElement = clickedItem.find('img');
-        const imgSrc = imgElement.attr('src') || '';
-
-        // Style the cloned element
-        $(clonedElement).css({
-          position: 'fixed',
-          top: rect.top + 'px',
-          left: rect.left + 'px',
-          width: rect.width + 'px',
-          height: rect.height + 'px',
-          backgroundColor: clickedItemData.backgroundColor,
-          borderRadius: clickedItemData.borderRadius,
-          zIndex: 9999,
-        });
-
-        // Create and append image container div inside the clone
-        if (imgSrc) {
-          const imgContainer = $('<div class="clone-img-container"></div>');
-          const imgClone = $('<img>').attr('src', imgSrc);
-
-          imgContainer.css({
-            width: '100%',
-            height: '100%',
-            overflow: 'hidden',
-          });
-
-          imgClone.css({
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            objectPosition: 'center',
-          });
-
-          imgContainer.append(imgClone);
-          $(clonedElement).append(imgContainer);
-        }
-
-        // Add to body
-        document.body.appendChild(clonedElement);
-      }
-    }
-    function createLeaveAnimation(container) {
-      const tl = gsap.timeline();
-
-      // Fade out container
-      tl.to(container, {
-        opacity: 0,
-        duration: 0.5,
-        onComplete: () => {
-          pauseScroll(true);
-        },
-      });
-
-      // If we have a cloned element, animate it to center
-      if (clonedElement && clickedItemData) {
-        // Calculate center position
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
-        const targetWidth = Math.min(windowWidth * 0.8, 800);
-        const targetHeight =
-          targetWidth * (clickedItemData.rect.height / clickedItemData.rect.width);
-        const targetLeft = (windowWidth - targetWidth) / 2;
-        const targetTop = (windowHeight - targetHeight) / 2;
-
-        // Animate to center
-        tl.to(
-          clonedElement,
-          {
-            top: targetTop,
-            left: targetLeft,
-            width: targetWidth,
-            height: targetHeight,
-            duration: 0.8,
-            ease: 'power2.inOut',
-            delay: 0.1,
-          },
-          '-=0.3'
-        );
-      }
-
-      return tl;
-    }
-
-    function animateCloneToTarget(container) {
-      return new Promise((resolve) => {
-        const targetElement = $(container).find('.work-d_hero-list-img-mask').first()[0];
-
-        if (clonedElement && targetElement) {
-          setTimeout(() => {
-            const state = Flip.getState(clonedElement);
-
-            const targetRect = targetElement.getBoundingClientRect();
-            $(clonedElement).css({
-              top: targetRect.top + 'px',
-              left: targetRect.left + 'px',
-              width: targetRect.width + 'px',
-              height: targetRect.height + 'px',
-            });
-
-            const imgElement = $(clonedElement).find('img');
-
-            const tl = gsap.timeline({
-              onComplete: () => {
-                gsap.to(container, {
-                  opacity: 1,
-                  duration: 0.5,
-                  onComplete: () => {
-                    if (clonedElement) {
-                      clonedElement.remove();
-                      clonedElement = null;
-                    }
-                    resolve();
-                  },
-                });
-              },
-            });
-
-            tl.add(
-              Flip.from(state, {
-                duration: 0.8,
-                ease: 'power2.inOut',
-              })
-            );
-
-            // Start at the same time as the FLIP animation
-          }, 100);
-        } else {
-          gsap.to(container, {
-            opacity: 1,
-            duration: 0.5,
-            onComplete: resolve,
-          });
-
-          if (clonedElement) {
-            clonedElement.remove();
-            clonedElement = null;
-          }
-        }
-      });
-    }
     return {
       name: 'home-to-work',
       from: { namespace: 'home' },
       to: { namespace: 'work' },
 
-      // Only apply to work slider items
       custom: ({ trigger }) => {
         return $(trigger).closest('.work_slider-item').length > 0;
       },
 
-      // Before transition
       before(data) {
         document.documentElement.classList.add('is-animating');
+
+        if (workTimelineInstance) {
+          workTimelineInstance.destroy();
+        }
       },
 
-      // Before leaving page
       beforeLeave(data) {
         cloneWorkItem(data.trigger);
       },
 
-      // When leaving page
       leave(data) {
         return createLeaveAnimation(data.current.container);
       },
 
-      // Before entering new page
       beforeEnter(data) {
         gsap.set(data.next.container, {
           opacity: 0,
@@ -3572,10 +3535,15 @@ function initBarba() {
         animateCloneToTarget(data.next.container);
       },
 
-      // After transition
       after(data) {
         runInitFunctions(data);
         document.documentElement.classList.remove('is-animating');
+
+        if (data.next.namespace === 'work' && workTimelineInstance) {
+          setTimeout(() => {
+            workTimelineInstance.refresh();
+          }, 300);
+        }
       },
     };
   }
