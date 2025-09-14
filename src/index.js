@@ -1387,12 +1387,20 @@ function animateWorkTimeline() {
   let scrollTriggerInstance;
   let cachedData = {};
   let lastUpdateTime = 0;
+  let lastTransformValue = -1;
+  let rafId = null;
+  let isInitialized = false;
   const updateThreshold = 16;
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
   function cacheItemPositions() {
     const items = $('.work-d_hero-list-item');
     const timelineItems = $('.work-d_hero-timeline_item');
     const isSmallScreen = $(window).width() < 992;
+
+    if (!items.length || !timelineItems.length) {
+      return false;
+    }
 
     cachedData = {
       items: items,
@@ -1407,12 +1415,74 @@ function animateWorkTimeline() {
     items.each(function (index) {
       const $item = $(this);
       const offset = $item.offset();
-      cachedData.itemData.push({
-        top: offset.top,
-        height: $item.outerHeight(),
-        center: offset.top + $item.outerHeight() / 2,
-      });
+      if (offset) {
+        cachedData.itemData.push({
+          top: offset.top,
+          height: $item.outerHeight(),
+          center: offset.top + $item.outerHeight() / 2,
+        });
+      }
     });
+
+    return cachedData.itemData.length > 0;
+  }
+
+  function updateTimelinePosition() {
+    if (!isInitialized || !cachedData.itemData.length) return;
+
+    const windowHeight = $(window).height();
+    const windowScrollTop = $(window).scrollTop();
+    const viewportCenter = windowScrollTop + windowHeight / 2;
+    const timelineInner = $('.work-d_hero-timeline-inner');
+
+    if (!timelineInner.length) return;
+
+    const firstItemCenter = cachedData.itemData[0].center;
+
+    if (viewportCenter < firstItemCenter) {
+      if (lastTransformValue !== 0) {
+        if (cachedData.isSmallScreen) {
+          timelineInner[0].style.transform = 'translate3d(0px, 0px, 0px)';
+        } else {
+          timelineInner[0].style.transform = 'translate3d(0px, 0px, 0px)';
+        }
+        lastTransformValue = 0;
+      }
+      return;
+    }
+
+    let imageProgress = 0;
+    let currentImageIndex = -1;
+
+    for (let i = 0; i < cachedData.itemData.length; i++) {
+      if (viewportCenter >= cachedData.itemData[i].center) {
+        imageProgress = i;
+        currentImageIndex = i;
+      } else {
+        break;
+      }
+    }
+
+    if (currentImageIndex < cachedData.itemData.length - 1 && currentImageIndex >= 0) {
+      const currentCenter = cachedData.itemData[currentImageIndex].center;
+      const nextCenter = cachedData.itemData[currentImageIndex + 1].center;
+
+      if (viewportCenter > currentCenter) {
+        const progressToNext = (viewportCenter - currentCenter) / (nextCenter - currentCenter);
+        imageProgress += Math.min(1, Math.max(0, progressToNext));
+      }
+    }
+
+    const translateValue = Math.round(imageProgress * cachedData.timelineItemSize);
+
+    if (Math.abs(translateValue - lastTransformValue) > 0.5) {
+      if (cachedData.isSmallScreen) {
+        timelineInner[0].style.transform = `translate3d(${-translateValue}px, 0px, 0px)`;
+      } else {
+        timelineInner[0].style.transform = `translate3d(0px, ${-translateValue}px, 0px)`;
+      }
+      lastTransformValue = translateValue;
+    }
   }
 
   function initializeTimeline() {
@@ -1430,17 +1500,18 @@ function animateWorkTimeline() {
     let firstItem = items.first();
     let lastItem = items.last();
 
+    if (!items.length || !timeline.length || !timelineInner.length) return;
+
     const timelineItems = $('.work-d_hero-timeline_item');
     const isSmallScreen = $(window).width() < 992;
 
-    cacheItemPositions();
+    if (!cacheItemPositions()) return;
 
-    gsap.set(timelineInner, {
-      y: 0,
-      x: 0,
-      force3D: true,
-      willChange: 'transform',
-    });
+    lastTransformValue = -1;
+    isInitialized = true;
+
+    timelineInner[0].style.transform = 'translate3d(0px, 0px, 0px)';
+    timelineInner[0].style.willChange = 'transform';
 
     let itemsTl = gsap.timeline({ paused: true });
 
@@ -1453,6 +1524,24 @@ function animateWorkTimeline() {
         },
         { yPercent: 0, opacity: 1, stagger: 0.2 }
       );
+    }
+
+    const currentScrollPosition = $(window).scrollTop();
+    const windowHeight = $(window).height();
+    const viewportCenter = currentScrollPosition + windowHeight / 2;
+
+    if (cachedData.itemData.length > 0) {
+      const firstItemCenter = cachedData.itemData[0].center;
+      const lastItemCenter = cachedData.itemData[cachedData.itemData.length - 1].center;
+
+      if (viewportCenter >= firstItemCenter && viewportCenter <= lastItemCenter) {
+        timeline.addClass('cc-active');
+        if (isSmallScreen) {
+          itemsTl.progress(1);
+        }
+
+        updateTimelinePosition();
+      }
     }
 
     scrollTriggerInstance = ScrollTrigger.create({
@@ -1492,58 +1581,35 @@ function animateWorkTimeline() {
         const lastItemCenter = listHeight - lastItemHeight / 2;
         return lastItemCenter + 'px center';
       },
-      scrub: 0,
-      onUpdate: (self) => {
-        const now = performance.now();
-        if (now - lastUpdateTime < updateThreshold) return;
-        lastUpdateTime = now;
+      scrub: isSafari ? false : 0,
+      onUpdate: isSafari
+        ? null
+        : (self) => {
+            if (rafId) return;
 
-        const windowHeight = $(window).height();
-        const windowScrollTop = $(window).scrollTop();
-        const viewportCenter = windowScrollTop + windowHeight / 2;
+            rafId = requestAnimationFrame(() => {
+              const now = performance.now();
+              if (now - lastUpdateTime < updateThreshold) {
+                rafId = null;
+                return;
+              }
+              lastUpdateTime = now;
 
-        if (!cachedData.itemData.length) return;
-
-        const firstItemCenter = cachedData.itemData[0].center;
-
-        if (viewportCenter < firstItemCenter) {
-          gsap.set(timelineInner, { y: 0, x: 0 });
-          cachedData.timelineItems.removeClass('active');
-          cachedData.timelineItems.eq(0).addClass('active');
-          return;
-        }
-
-        let imageProgress = 0;
-        let currentImageIndex = -1;
-
-        for (let i = 0; i < cachedData.itemData.length; i++) {
-          if (viewportCenter >= cachedData.itemData[i].center) {
-            imageProgress = i;
-            currentImageIndex = i;
-          } else {
-            break;
-          }
-        }
-
-        if (currentImageIndex < cachedData.itemData.length - 1 && currentImageIndex >= 0) {
-          const currentCenter = cachedData.itemData[currentImageIndex].center;
-          const nextCenter = cachedData.itemData[currentImageIndex + 1].center;
-
-          if (viewportCenter > currentCenter) {
-            const progressToNext = (viewportCenter - currentCenter) / (nextCenter - currentCenter);
-            imageProgress += Math.min(1, Math.max(0, progressToNext));
-          }
-        }
-
-        const translateValue = imageProgress * cachedData.timelineItemSize;
-
-        if (cachedData.isSmallScreen) {
-          gsap.set(timelineInner, { x: -translateValue, y: 0 });
-        } else {
-          gsap.set(timelineInner, { y: -translateValue, x: 0 });
-        }
-      },
+              updateTimelinePosition();
+              rafId = null;
+            });
+          },
     });
+
+    if (isSafari) {
+      let safariTimer;
+      $(window).on('scroll.workTimelineSafari', () => {
+        clearTimeout(safariTimer);
+        safariTimer = setTimeout(() => {
+          updateTimelinePosition();
+        }, 5);
+      });
+    }
 
     $(document).off('click.workTimeline', '.work-d_hero-timeline_item');
     $(document).on('click.workTimeline', '.work-d_hero-timeline_item', function () {
@@ -1574,7 +1640,7 @@ function animateWorkTimeline() {
     resizeTimer = setTimeout(() => {
       if ($(window).width() !== $(window).data('prevWidth')) {
         $(window).data('prevWidth', $(window).width());
-        timelineGlobalState.isInitialized = false;
+        isInitialized = false;
         setTimeout(() => {
           waitForImagesAndLayout().then(() => {
             initializeTimeline();
@@ -1585,19 +1651,20 @@ function animateWorkTimeline() {
   }
 
   function cleanup() {
-    if (timelineGlobalState.scrollTriggerInstance) {
-      timelineGlobalState.scrollTriggerInstance.kill();
-      timelineGlobalState.scrollTriggerInstance = null;
+    if (scrollTriggerInstance) {
+      scrollTriggerInstance.kill();
+      scrollTriggerInstance = null;
     }
-    if (timelineGlobalState.rafId) {
-      cancelAnimationFrame(timelineGlobalState.rafId);
-      timelineGlobalState.rafId = null;
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
     }
     $(window).off('resize.workTimeline');
+    $(window).off('scroll.workTimelineSafari');
     $(document).off('click.workTimeline');
-    timelineGlobalState.isInitialized = false;
-    timelineGlobalState.lastTransformValue = -1;
-    timelineGlobalState.cachedData = {};
+    isInitialized = false;
+    lastTransformValue = -1;
+    cachedData = {};
   }
 
   waitForImagesAndLayout().then(() => {
