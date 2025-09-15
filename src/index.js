@@ -1151,14 +1151,20 @@ function animateHeroScrol() {
         end: 'bottom top',
         scrub: 1,
         onEnterBack: () => {
-          gsap.to($('.hp-work_head-link'), {
-            rotate: 0,
-          });
+          let link = $('.hp-work_head-link');
+          if (link.length) {
+            gsap.to($('.hp-work_head-link'), {
+              rotate: 0,
+            });
+          }
         },
         onLeave: () => {
-          gsap.to($('.hp-work_head-link'), {
-            rotate: 180,
-          });
+          let link = $('.hp-work_head-link');
+          if (link.length) {
+            gsap.to($('.hp-work_head-link'), {
+              rotate: 180,
+            });
+          }
         },
       },
     });
@@ -3564,31 +3570,192 @@ function initBarba() {
   }
 
   function createWorkItemTransition() {
+    function cloneWorkItem(trigger) {
+      const clickedItem = $(trigger).closest('.work_slider-item').find('.work_slider-item_visual');
+
+      if (clickedItem.length) {
+        // Store position and size data
+        const rect = clickedItem[0].getBoundingClientRect();
+        const styles = window.getComputedStyle(clickedItem[0]);
+
+        // Store data for later use
+        clickedItemData = {
+          rect,
+          backgroundColor: styles.backgroundColor,
+          borderRadius: styles.borderRadius || '0px',
+        };
+
+        // Create clone element
+        clonedElement = document.createElement('div');
+        clonedElement.className = 'work-item-clone';
+
+        // Find the image element in the clicked item
+        const imgElement = clickedItem.find('img');
+        const imgSrc = imgElement.attr('src') || '';
+
+        // Style the cloned element
+        $(clonedElement).css({
+          position: 'fixed',
+          top: rect.top + 'px',
+          left: rect.left + 'px',
+          width: rect.width + 'px',
+          height: rect.height + 'px',
+          backgroundColor: clickedItemData.backgroundColor,
+          borderRadius: clickedItemData.borderRadius,
+          zIndex: 9999,
+        });
+
+        // Create and append image container div inside the clone
+        if (imgSrc) {
+          const imgContainer = $('<div class="clone-img-container"></div>');
+          const imgClone = $('<img>').attr('src', imgSrc);
+
+          imgContainer.css({
+            width: '100%',
+            height: '100%',
+            overflow: 'hidden',
+          });
+
+          imgClone.css({
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center',
+          });
+
+          imgContainer.append(imgClone);
+          $(clonedElement).append(imgContainer);
+        }
+
+        // Add to body
+        document.body.appendChild(clonedElement);
+      }
+    }
+    function createLeaveAnimation(container) {
+      const tl = gsap.timeline();
+
+      // Fade out container
+      tl.to(container, {
+        opacity: 0,
+        duration: 0.5,
+        onComplete: () => {
+          pauseScroll(true);
+        },
+      });
+
+      // If we have a cloned element, animate it to center
+      if (clonedElement && clickedItemData) {
+        // Calculate center position
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const targetWidth = Math.min(windowWidth * 0.8, 800);
+        const targetHeight =
+          targetWidth * (clickedItemData.rect.height / clickedItemData.rect.width);
+        const targetLeft = (windowWidth - targetWidth) / 2;
+        const targetTop = (windowHeight - targetHeight) / 2;
+
+        // Animate to center
+        tl.to(
+          clonedElement,
+          {
+            top: targetTop,
+            left: targetLeft,
+            width: targetWidth,
+            height: targetHeight,
+            duration: 0.8,
+            ease: 'power2.inOut',
+            delay: 0.1,
+          },
+          '-=0.3'
+        );
+      }
+
+      return tl;
+    }
+
+    function animateCloneToTarget(container) {
+      return new Promise((resolve) => {
+        const targetElement = $(container).find('.work-d_hero-list-img-mask').first()[0];
+
+        if (clonedElement && targetElement) {
+          setTimeout(() => {
+            const state = Flip.getState(clonedElement);
+
+            const targetRect = targetElement.getBoundingClientRect();
+            $(clonedElement).css({
+              top: targetRect.top + 'px',
+              left: targetRect.left + 'px',
+              width: targetRect.width + 'px',
+              height: targetRect.height + 'px',
+            });
+
+            const imgElement = $(clonedElement).find('img');
+
+            const tl = gsap.timeline({
+              onComplete: () => {
+                gsap.to(container, {
+                  opacity: 1,
+                  duration: 0.5,
+                  onComplete: () => {
+                    if (clonedElement) {
+                      clonedElement.remove();
+                      clonedElement = null;
+                    }
+                    resolve();
+                  },
+                });
+              },
+            });
+
+            tl.add(
+              Flip.from(state, {
+                duration: 0.8,
+                ease: 'power2.inOut',
+              })
+            );
+
+            // Start at the same time as the FLIP animation
+          }, 100);
+        } else {
+          gsap.to(container, {
+            opacity: 1,
+            duration: 0.5,
+            onComplete: resolve,
+          });
+
+          if (clonedElement) {
+            clonedElement.remove();
+            clonedElement = null;
+          }
+        }
+      });
+    }
     return {
       name: 'home-to-work',
       from: { namespace: 'home' },
       to: { namespace: 'work' },
 
+      // Only apply to work slider items
       custom: ({ trigger }) => {
         return $(trigger).closest('.work_slider-item').length > 0;
       },
 
+      // Before transition
       before(data) {
         document.documentElement.classList.add('is-animating');
-
-        if (workTimelineInstance) {
-          workTimelineInstance.destroy();
-        }
       },
 
+      // Before leaving page
       beforeLeave(data) {
         cloneWorkItem(data.trigger);
       },
 
+      // When leaving page
       leave(data) {
         return createLeaveAnimation(data.current.container);
       },
 
+      // Before entering new page
       beforeEnter(data) {
         gsap.set(data.next.container, {
           opacity: 0,
@@ -3602,15 +3769,10 @@ function initBarba() {
         animateCloneToTarget(data.next.container);
       },
 
+      // After transition
       after(data) {
         runInitFunctions(data);
         document.documentElement.classList.remove('is-animating');
-
-        if (data.next.namespace === 'work' && workTimelineInstance) {
-          setTimeout(() => {
-            workTimelineInstance.refresh();
-          }, 300);
-        }
       },
     };
   }
