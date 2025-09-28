@@ -1577,7 +1577,7 @@ function animateHomepageHero() {
       { opacity: 1, xPercent: 0, stagger: 0.2 }
     );
     tl.fromTo(
-      $('.hp-hero').find('[data-item-reveal]'),
+      $('.hp-hero').find('[data-item-reveal-custom]'),
       { opacity: 0, visibility: 'hidden' },
       { opacity: 1, visibility: 'visible' }
     );
