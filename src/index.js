@@ -644,7 +644,7 @@ function initSoundClick() {
       sampleRate: 44100,
     });
 
-    Howler.volume(1.0);
+    Howler.volume(0.5);
 
     sound = new Howl({
       src: [soundUrl],
