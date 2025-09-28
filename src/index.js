@@ -5,6 +5,7 @@ if (typeof THREE === 'undefined') {
 }
 
 import { fragmentShader, vertexShader } from './three/shaders.js';
+import { initBunnyLightboxPlayer, initBunnyPlayerBackground } from './utils/hlsplayer.js';
 
 gsap.registerPlugin(SplitText, ScrollTrigger, TextPlugin);
 
@@ -497,372 +498,6 @@ function resetWebflow(data) {
   });
 }
 
-const VideoModal = {
-  isOpen: false,
-  $overlay: null,
-  $container: null,
-  $videoWrapper: null,
-  $originalElement: null,
-  originalMaxWidth: null,
-  originalPlayers: [],
-  modalPlayer: null,
-
-  init() {
-    this.initOriginalPlyrs();
-    this.bindEvents();
-    this.addStyles();
-  },
-
-  initOriginalPlyrs() {
-    const $videoEls = $('.plyr_video');
-    if ($videoEls.length) {
-      this.originalPlayers = [];
-
-      $videoEls.each((index, videoEl) => {
-        const player = new Plyr(videoEl, {
-          controls: ['play', 'progress', 'mute', 'fullscreen'],
-          muted: true,
-          autoplay: true,
-          loop: { active: true },
-        });
-
-        $(videoEl).closest('[data-video-player]').find('.plyr__controls').hide();
-
-        player.on('ready', () => {
-          setTimeout(() => {
-            player.play();
-            player.muted = true;
-          }, 100);
-        });
-
-        player.on('loadeddata', () => {
-          player.play();
-        });
-
-        this.originalPlayers.push(player);
-      });
-    }
-  },
-
-  bindEvents() {
-    $('[data-video-player]').each((index, element) => {
-      $(element).click((e) => {
-        e.preventDefault();
-        this.open($(e.currentTarget));
-      });
-    });
-  },
-
-  open($element) {
-    if (this.isOpen) return;
-
-    const isMobile = window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
-
-    if (isMobile) {
-      const $video = $element.find('video')[0];
-
-      if ($video) {
-        // Reset video state
-        $video.removeAttribute('playsinline');
-        $video.removeAttribute('webkit-playsinline');
-        $video.controls = false;
-        $video.currentTime = 0; // Restart
-        $video.muted = false;
-
-        // Handle fullscreen exit
-        const handleFullscreenExit = () => {
-          // Clean up listeners
-          $video.removeEventListener('webkitendfullscreen', handleFullscreenExit);
-          $video.removeEventListener('fullscreenchange', handleFullscreenExit);
-
-          // Pause and reset video
-          $video.pause();
-          $video.setAttribute('playsinline', '');
-          $video.setAttribute('webkit-playsinline', '');
-          $video.controls = false;
-
-          // Replace video element to fully reset
-          const $container = $element.closest('[data-video-player]');
-          const $newVideo = $($video).clone(true)[0];
-          $video.replaceWith($newVideo);
-
-          // Reinitialize Plyr
-          const newPlayer = new Plyr($newVideo, {
-            controls: ['play', 'progress', 'mute', 'fullscreen'],
-            muted: true,
-            autoplay: true,
-            loop: { active: true },
-          });
-
-          $($container).find('.plyr__controls').hide();
-
-          newPlayer.on('ready', () => {
-            newPlayer.play().catch(() => {});
-          });
-        };
-
-        // Add fullscreen exit listeners
-        $video.addEventListener('webkitendfullscreen', handleFullscreenExit);
-        $video.addEventListener('fullscreenchange', () => {
-          if (!document.fullscreenElement) handleFullscreenExit();
-        });
-
-        // Play and fullscreen
-        $video
-          .play()
-          .then(() => {
-            const requestFullscreen =
-              $video.requestFullscreen ||
-              $video.webkitEnterFullscreen ||
-              $video.webkitRequestFullscreen ||
-              $video.msRequestFullscreen;
-
-            if (requestFullscreen) {
-              requestFullscreen.call($video);
-            }
-          })
-          .catch((err) => {
-            console.warn('Autoplay or fullscreen failed:', err);
-          });
-      }
-
-      return;
-    }
-
-    // Non-mobile modal logic...
-    this.$originalElement = $element;
-    this.originalMaxWidth = $element.css('max-width');
-
-    pauseScroll(true);
-    $element.css('max-width', 'none');
-
-    this.createElement();
-    this.setupModal($element);
-    this.animateIn();
-
-    this.isOpen = true;
-  },
-
-  close() {
-    if (!this.isOpen) return;
-
-    this.pauseVideo();
-    this.animateOut();
-  },
-
-  createElement() {
-    this.$overlay = $('<div class="video-modal-overlay"></div>');
-    this.$container = $('<div class="video-modal-container"></div>');
-    this.$videoWrapper = $('<div class="video-modal-wrapper"></div>');
-    const $closeBtn = $('<div class="video-modal-close">×</div>');
-
-    this.$videoWrapper.append($closeBtn);
-    this.$container.append(this.$videoWrapper);
-    this.$overlay.append(this.$container);
-    $('body').append(this.$overlay);
-
-    this.bindCloseEvents($closeBtn);
-  },
-
-  setupModal($element) {
-    const elementRect = $element[0].getBoundingClientRect();
-    const aspectRatio = $element.attr('data-video-player') || '16/9';
-
-    this.$container.css({
-      position: 'fixed',
-      left: elementRect.left + 'px',
-      top: elementRect.top + 'px',
-      width: elementRect.width + 'px',
-      height: elementRect.height + 'px',
-      zIndex: 9999,
-    });
-
-    this.$videoWrapper.css('aspect-ratio', aspectRatio);
-
-    const $clonedElement = $element.clone(true);
-    $clonedElement.find('.plyr').replaceWith($clonedElement.find('video'));
-    this.$videoWrapper.append($clonedElement);
-    $element.css('visibility', 'hidden');
-  },
-
-  animateIn() {
-    gsap.set(this.$overlay, { opacity: 0 });
-    gsap.to(this.$overlay, { opacity: 1, duration: 0.3 });
-
-    gsap.to(this.$container, {
-      left: '5vw',
-      top: '5vh',
-      width: '90vw',
-      height: '90vh',
-      duration: 0.6,
-      ease: 'power2.out',
-      onComplete: () => this.activateModalVideo(),
-    });
-  },
-
-  activateModalVideo() {
-    const $clonedElement = this.$videoWrapper.find('[data-video-player]');
-    const $videoEl = $clonedElement.find('.plyr_video');
-
-    if ($videoEl.length) {
-      this.modalPlayer = new Plyr($videoEl[0], {
-        controls: ['play', 'progress', 'mute', 'fullscreen'],
-        muted: false,
-        autoplay: false,
-        loop: { active: true },
-      });
-
-      this.modalPlayer.on('ready', () => {
-        setTimeout(() => {
-          this.modalPlayer.restart();
-          this.modalPlayer.muted = false;
-          this.modalPlayer.play().catch(() => {});
-        }, 100);
-      });
-    }
-  },
-
-  animateOut() {
-    const elementRect = this.$originalElement[0].getBoundingClientRect();
-
-    gsap.to(this.$container, {
-      left: elementRect.left + 'px',
-      top: elementRect.top + 'px',
-      width: elementRect.width + 'px',
-      height: elementRect.height + 'px',
-      duration: 0.4,
-      ease: 'power2.in',
-    });
-
-    gsap.to(this.$overlay, {
-      opacity: 0,
-      duration: 0.3,
-      delay: 0.2,
-      onComplete: () => this.cleanup(),
-    });
-  },
-
-  cleanup() {
-    this.$overlay.remove();
-    this.$originalElement.css({
-      visibility: 'visible',
-      'max-width': this.originalMaxWidth,
-    });
-
-    if (this.modalPlayer) {
-      this.modalPlayer.destroy();
-      this.modalPlayer = null;
-    }
-
-    pauseScroll(false);
-    $(document).off('keydown.videoModal');
-    this.resetProperties();
-  },
-
-  resetProperties() {
-    this.isOpen = false;
-    this.$overlay = null;
-    this.$container = null;
-    this.$videoWrapper = null;
-    this.$originalElement = null;
-    this.originalMaxWidth = null;
-  },
-
-  bindCloseEvents($closeBtn) {
-    $closeBtn.click(() => this.close());
-    this.$overlay.click((e) => {
-      if (e.target === this.$overlay[0]) this.close();
-    });
-    $(document).on('keydown.videoModal', (e) => {
-      if (e.key === 'Escape') this.close();
-    });
-  },
-
-  playVideo() {
-    if (this.modalPlayer) {
-      this.modalPlayer.play();
-    }
-  },
-
-  pauseVideo() {
-    if (this.modalPlayer) {
-      this.modalPlayer.pause();
-    }
-  },
-
-  addStyles() {
-    $('<style>')
-      .text(
-        `
-        .video-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 9998;
-            backdrop-filter: blur(10px);
-        }
-        
-        .video-modal-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .video-modal-wrapper {
-            width: 100%;
-            max-width: 1200px;
-            max-height: 80vh;
-            position: relative;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
-        }
-        
-        .video-modal-wrapper [data-video-player] {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover;
-        }
-        
-        .video-modal-wrapper video {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover;
-        }
-        
-        .video-modal-close {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 40px;
-            height: 40px;
-            background: var(--body1);
-            color: var(--text-1);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: bold;
-            cursor: pointer;
-            z-index: 10000;
-            transition: all 0.2s ease;
-        }
-        
-        .video-modal-close:hover {
-            background: var(--body-2);
-            color: var(--text-2);
-            transform: scale(1.1);
-        }
-    `
-      )
-      .appendTo('head');
-  },
-};
-
 function initDynamicCustomTextCursor() {
   let cursorItem = document.querySelector('.cursor');
   if (!cursorItem) return;
@@ -986,6 +621,75 @@ function initDynamicCustomTextCursor() {
   if (checkScreenSize()) {
     initCursor();
   }
+}
+
+function initSoundClick() {
+  let soundUrl = 'https://showreel-volkov-design-25.b-cdn.net/click-sound.wav';
+  let shouldPlay = true;
+  let isActive = false;
+  let ctx;
+  let sound;
+
+  function initSound() {
+    shouldPlay = true;
+    startSoundEvents();
+  }
+
+  function initAudioContext() {
+    if (isActive) return;
+    isActive = true;
+
+    ctx = new AudioContext({
+      latencyHint: 'interactive',
+      sampleRate: 44100,
+    });
+
+    Howler.volume(1.0);
+
+    sound = new Howl({
+      src: [soundUrl],
+      onplayerror: function () {
+        console.log('Error Playing the Sound');
+      },
+    });
+  }
+
+  function startSoundEvents() {
+    if (window.innerWidth <= 991) return;
+
+    $(document).on('click', function () {
+      if (!isActive) {
+        initAudioContext();
+        setTimeout(function () {
+          playSound();
+        }, 50);
+      } else {
+        playSound();
+      }
+    });
+
+    $('[data-audio="toggle"]').on('click', function () {
+      toggleAudio();
+    });
+  }
+
+  function toggleAudio() {
+    shouldPlay = !shouldPlay;
+  }
+
+  function playSound() {
+    if (!shouldPlay) return;
+
+    if (!ctx) {
+      setTimeout(function () {
+        sound.play();
+      }, 10);
+    } else {
+      sound.play();
+    }
+  }
+
+  initSound();
 }
 
 // -- Nav
@@ -3305,13 +3009,13 @@ function initSiteFunctionality() {
   initBackHome();
   initClipboardCopy();
   handleAnchorScroll();
+  initSoundClick();
   document.fonts.ready.then(function () {
     initMaskTextReveal('[data-split="heading"]');
     initItemReveal('[data-item-reveal]');
     initButtonCharacterStagger();
   });
   window.initDarkModeToggle();
-  VideoModal.init();
 }
 
 // Pages
@@ -3319,6 +3023,8 @@ function initHomepage() {
   animateHeroScrol();
   initWorkScroll();
   animateHomepageHero();
+  initBunnyLightboxPlayer();
+  initBunnyPlayerBackground();
   animateWorksLinks('.hp-hero_content-clients ul', '.hp-hero_links');
   initDynamicCustomTextCursor();
   initWorkCounter();
@@ -3777,3 +3483,78 @@ function initBarba() {
     };
   }
 }
+
+$(document).ready(function () {
+  const heroVisual = $('.hp-hero_content-visual');
+
+  if (heroVisual.length) {
+    const state = Flip.getState(heroVisual);
+    const heroSection = $('.section.cc-hp-hero');
+    const heightState = Flip.getState(heroSection, { props: 'height' });
+
+    const elementsToStyle = [
+      { el: $('.page-main'), prop: 'z-index', value: 'auto' },
+      { el: heroSection, prop: 'z-index', value: '9999' },
+      { el: $('.nav_wrapper'), prop: 'z-index', value: '1' },
+    ];
+
+    elementsToStyle.forEach((item) => {
+      item.el.css(item.prop, item.value);
+    });
+
+    $('.hp-preloader').css('display', 'block');
+
+    heroVisual.addClass('is-preloader');
+
+    setTimeout(() => {
+      const tl = gsap.timeline({
+        onStart: () => {
+          heroSection.css('min-height', '100dvh');
+        },
+        onComplete: () => {
+          elementsToStyle.forEach((item) => {
+            item.el.css(item.prop, '');
+          });
+
+          Flip.to(heightState, {
+            duration: 0.8,
+            ease: 'power2.inOut',
+            onComplete: () => {
+              heroVisual.removeClass('is-preloader');
+              Flip.killFlipsOf(heroVisual[0]);
+              Flip.killFlipsOf(heroSection[0]);
+              heroVisual.removeAttr('style').removeAttr('data-flip-id');
+              $('.hp-preloader').css('display', 'none').removeAttr('style');
+              heroVisual.find('.bunny-wrap').removeAttr('style');
+              heroSection.removeAttr('style').removeAttr('data-flip-id');
+            },
+          });
+        },
+      });
+
+      tl.to(
+        $('.hp-preloader'),
+        {
+          opacity: 0,
+          duration: 1.5,
+          ease: 'power2.inOut',
+        },
+        0
+      ).to(
+        heroVisual.find('.bunny-wrap'),
+        {
+          width: '100%',
+          height: '100%',
+          duration: 1.5,
+          ease: 'power2.inOut',
+        },
+        0
+      );
+
+      Flip.to(state, {
+        duration: 1.5,
+        ease: 'power2.inOut',
+      });
+    }, 5000);
+  }
+});
