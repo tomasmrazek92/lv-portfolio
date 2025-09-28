@@ -644,7 +644,7 @@ function initSoundClick() {
       sampleRate: 44100,
     });
 
-    Howler.volume(0.5);
+    Howler.volume(0.1);
 
     sound = new Howl({
       src: [soundUrl],
@@ -668,13 +668,14 @@ function initSoundClick() {
       }
     });
 
-    $('[data-audio="toggle"]').on('click', function () {
-      toggleAudio();
+    $('[data-sound-toggle]').on('click', function () {
+      toggleAudio($(this));
     });
   }
 
-  function toggleAudio() {
+  function toggleAudio($toggle) {
     shouldPlay = !shouldPlay;
+    $toggle.attr('data-sound-state', shouldPlay ? 'on' : 'off');
   }
 
   function playSound() {
@@ -3484,6 +3485,7 @@ function initBarba() {
   }
 }
 
+/*
 $(document).ready(function () {
   const heroVisual = $('.hp-hero_content-visual');
 
@@ -3558,3 +3560,4 @@ $(document).ready(function () {
     }, 5000);
   }
 });
+*/
