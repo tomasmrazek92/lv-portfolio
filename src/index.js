@@ -1028,21 +1028,9 @@ function initBunnyLightboxPlayer() {
     var btn = e.target.closest('[data-player-control]');
     if (!btn || !player.contains(btn)) return;
     var type = btn.getAttribute('data-player-control');
-
-    if (type === 'play' || type === 'pause' || type === 'playpause') {
-      var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      alert(isMobile);
-      alert(isMobile && (video.paused || video.ended));
-      if (isMobile && (video.paused || video.ended)) {
-        toggleFullscreen();
-      } else {
-        togglePlay();
-      }
-    } else if (type === 'mute') {
-      toggleMute();
-    } else if (type === 'fullscreen') {
-      toggleFullscreen();
-    }
+    if (type === 'play' || type === 'pause' || type === 'playpause') togglePlay();
+    else if (type === 'mute') toggleMute();
+    else if (type === 'fullscreen') toggleFullscreen();
   });
 
   // Fullscreen helpers
@@ -1320,6 +1308,13 @@ function initBunnyLightboxPlayer() {
       var imgEl = openBtn.querySelector('[data-bunny-lightbox-placeholder]');
       var placeholderUrl = imgEl ? imgEl.getAttribute('src') : '';
       openLightbox(src, placeholderUrl);
+
+      var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile && autoplay) {
+        setTimeout(function () {
+          toggleFullscreen();
+        }, 100);
+      }
       return;
     }
     var closeBtn = e.target.closest('[data-bunny-lightbox-control="close"]');
