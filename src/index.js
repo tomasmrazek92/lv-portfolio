@@ -1031,16 +1031,13 @@ function initBunnyLightboxPlayer() {
 
     if (type === 'play' || type === 'pause' || type === 'playpause') {
       var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      if (
-        isMobile &&
-        (video.paused || video.ended) &&
-        video.webkitSupportsFullscreen &&
-        typeof video.webkitEnterFullscreen === 'function'
-      ) {
-        video.webkitEnterFullscreen();
-      } else {
-        togglePlay();
+      if (isMobile && (video.paused || video.ended)) {
+        if (typeof video.webkitEnterFullscreen === 'function') {
+          video.webkitEnterFullscreen();
+          return;
+        }
       }
+      togglePlay();
     } else if (type === 'mute') {
       toggleMute();
     } else if (type === 'fullscreen') {
