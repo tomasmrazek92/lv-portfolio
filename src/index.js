@@ -658,7 +658,9 @@ function initSoundClick() {
   function startSoundEvents() {
     if (window.innerWidth <= 991) return;
 
-    $(document).on('click', function () {
+    $(document).on('click', function (e) {
+      if ($(e.target).closest('[data-sound-toggle]').length) return;
+
       if (!isActive) {
         initAudioContext();
         setTimeout(function () {
@@ -669,7 +671,8 @@ function initSoundClick() {
       }
     });
 
-    $('[data-sound-toggle]').on('click', function () {
+    $('[data-sound-toggle]').on('click', function (e) {
+      e.stopPropagation();
       toggleAudio($(this));
     });
   }
