@@ -626,14 +626,14 @@ function initDynamicCustomTextCursor() {
 
 function initSoundClick() {
   let soundUrl = 'https://showreel-volkov-design-25.b-cdn.net/click-sound%202.wav';
-  let shouldPlay = true;
+  let shouldPlay = sessionStorage.getItem('soundEnabled') !== 'false';
   let isActive = false;
   let ctx;
   let sound;
 
   function initSound() {
-    shouldPlay = true;
     startSoundEvents();
+    updateToggleStates();
   }
 
   function initAudioContext() {
@@ -676,7 +676,12 @@ function initSoundClick() {
 
   function toggleAudio($toggle) {
     shouldPlay = !shouldPlay;
+    sessionStorage.setItem('soundEnabled', shouldPlay);
     $toggle.attr('data-sound-state', shouldPlay ? 'on' : 'off');
+  }
+
+  function updateToggleStates() {
+    $('[data-sound-toggle]').attr('data-sound-state', shouldPlay ? 'on' : 'off');
   }
 
   function playSound() {
@@ -1033,16 +1038,24 @@ function initBunnyLightboxPlayer() {
     return !!(document.fullscreenElement || document.webkitFullscreenElement);
   }
   function enterFullscreen() {
+    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      if (video.webkitSupportsFullscreen && typeof video.webkitEnterFullscreen === 'function')
+        return video.webkitEnterFullscreen();
+      if (typeof video.requestFullscreen === 'function') return video.requestFullscreen();
+    }
+
     if (player.requestFullscreen) return player.requestFullscreen();
     if (video.requestFullscreen) return video.requestFullscreen();
     if (video.webkitSupportsFullscreen && typeof video.webkitEnterFullscreen === 'function')
       return video.webkitEnterFullscreen();
   }
   function exitFullscreen() {
-    if (document.exitFullscreen) return document.exitFullscreen();
-    if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
     if (video.webkitDisplayingFullscreen && typeof video.webkitExitFullscreen === 'function')
       return video.webkitExitFullscreen();
+    if (document.exitFullscreen) return document.exitFullscreen();
+    if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
   }
   function toggleFullscreen() {
     if (isFsActive() || video.webkitDisplayingFullscreen) exitFullscreen();
