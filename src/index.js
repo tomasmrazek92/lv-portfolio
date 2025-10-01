@@ -1064,6 +1064,10 @@ function initBunnyLightboxPlayer() {
   });
   video.addEventListener('webkitendfullscreen', function () {
     setFsAttr(false);
+    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      closeLightbox();
+    }
   });
 
   // Time text (not in rAF)
