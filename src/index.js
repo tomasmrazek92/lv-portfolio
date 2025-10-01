@@ -1029,21 +1029,22 @@ function initBunnyLightboxPlayer() {
     if (!btn || !player.contains(btn)) return;
     var type = btn.getAttribute('data-player-control');
 
-    if (type === 'fullscreen') {
+    if (type === 'play' || type === 'pause' || type === 'playpause') {
       var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       if (
         isMobile &&
+        (video.paused || video.ended) &&
         video.webkitSupportsFullscreen &&
         typeof video.webkitEnterFullscreen === 'function'
       ) {
         video.webkitEnterFullscreen();
       } else {
-        toggleFullscreen();
+        togglePlay();
       }
-    } else if (type === 'play' || type === 'pause' || type === 'playpause') {
-      togglePlay();
     } else if (type === 'mute') {
       toggleMute();
+    } else if (type === 'fullscreen') {
+      toggleFullscreen();
     }
   });
 
